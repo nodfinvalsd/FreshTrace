@@ -1,0 +1,34 @@
+spring:
+  application:
+    name: freshtrace
+  profiles:
+    active: dev
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+jwt:
+  secret: ${JWT_SECRET:freshtrace-jwt-secret-key-2026-please-change-in-prod}
+  expire: 7200
+
+aes:
+  key: ${AES_KEY:freshtraceaeskey}
+
+storage:
+  local-dir: ${STORAGE_DIR:uploads}
+  base-url: /uploads
