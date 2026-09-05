@@ -41,6 +41,21 @@ public enum ErrorCode {
     PRODUCT_AUDIT_REASON_REQUIRED(30021, "驳回时必须填写审核意见"),
     PRODUCT_VERSION_CONFLICT(30022, "商品已被他人修改，请刷新后重试"),
 
+    CART_ITEM_NOT_FOUND(30023, "购物车项不存在"),
+    CART_ITEM_PERMISSION_DENIED(30024, "无权操作该购物车项"),
+    ORDER_NOT_FOUND(30025, "订单不存在"),
+    ORDER_PERMISSION_DENIED(30026, "无权操作该订单"),
+    ORDER_STATUS_INVALID(30027, "订单状态不允许该操作"),
+    SUB_ORDER_NOT_FOUND(30028, "子订单不存在"),
+    SUB_ORDER_STATUS_INVALID(30029, "子订单状态转换不合法"),
+    PRODUCT_NOT_ON_SALE(30030, "商品不在销售中"),
+    STOCK_NOT_ENOUGH(30031, "库存不足"),
+    ORDER_IDEMPOTENT_CONFLICT(30032, "请勿重复提交订单"),
+    PAYMENT_NOT_FOUND(30033, "支付记录不存在"),
+    PAYMENT_STATUS_INVALID(30034, "支付状态异常"),
+    REFUND_EXISTS(30035, "退款记录已存在"),
+    REFUND_STATUS_INVALID(30036, "退款状态异常"),
+
     SYSTEM_ERROR(99999, "系统内部错误");
 
     private final Integer code;
