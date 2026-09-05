@@ -10,21 +10,38 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class JwtBlacklistService {
 
-    private static final String KEY_PREFIX = "jwt:blacklist:";
+    private static final String ACCESS_PREFIX = "jwt:blacklist:access:";
+    private static final String REFRESH_PREFIX = "jwt:blacklist:refresh:";
 
     private final StringRedisTemplate stringRedisTemplate;
 
-    public void blacklist(String jti, long ttlSeconds) {
+    public void blacklistAccess(String jti, long ttlSeconds) {
+        blacklist(ACCESS_PREFIX, jti, ttlSeconds);
+    }
+
+    public void blacklistRefresh(String jti, long ttlSeconds) {
+        blacklist(REFRESH_PREFIX, jti, ttlSeconds);
+    }
+
+    public boolean isAccessBlacklisted(String jti) {
+        return isBlacklisted(ACCESS_PREFIX, jti);
+    }
+
+    public boolean isRefreshBlacklisted(String jti) {
+        return isBlacklisted(REFRESH_PREFIX, jti);
+    }
+
+    private void blacklist(String prefix, String jti, long ttlSeconds) {
         if (ttlSeconds <= 0) {
             return;
         }
-        stringRedisTemplate.opsForValue().set(KEY_PREFIX + jti, "1", Duration.ofSeconds(ttlSeconds));
+        stringRedisTemplate.opsForValue().set(prefix + jti, "1", Duration.ofSeconds(ttlSeconds));
     }
 
-    public boolean isBlacklisted(String jti) {
+    private boolean isBlacklisted(String prefix, String jti) {
         if (jti == null) {
             return false;
         }
-        return Boolean.TRUE.equals(stringRedisTemplate.hasKey(KEY_PREFIX + jti));
+        return Boolean.TRUE.equals(stringRedisTemplate.hasKey(prefix + jti));
     }
 }

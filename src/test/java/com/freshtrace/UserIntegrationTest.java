@@ -1,12 +1,18 @@
 package com.freshtrace;
 
+import com.freshtrace.common.JwtUtils;
+import com.freshtrace.security.JwtBlacklistService;
 import com.freshtrace.user.dto.AddressDTO;
 import com.freshtrace.user.dto.LoginDTO;
+import com.freshtrace.user.dto.LogoutDTO;
+import com.freshtrace.user.dto.RefreshDTO;
 import com.freshtrace.user.dto.RegisterDTO;
 import com.freshtrace.user.dto.UpdateProfileDTO;
 import com.freshtrace.user.entity.User;
 import com.freshtrace.user.mapper.UserMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtBuilder;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.Test;
@@ -21,6 +27,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import javax.crypto.SecretKey;
@@ -57,6 +64,12 @@ class UserIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private JwtUtils jwtUtils;
+
+    @Autowired
+    private JwtBlacklistService jwtBlacklistService;
 
     @Value("${jwt.secret}")
     private String jwtSecret;
@@ -101,14 +114,27 @@ class UserIntegrationTest {
     }
 
     @Test
-    void loginSuccess() throws Exception {
+    void loginReturnsTwoTokens() throws Exception {
         registerByHttp("alice", "13800000001");
-        mockMvc.perform(post("/user/login")
+        MvcResult result = mockMvc.perform(post("/user/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(login("alice", "123456"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.token").isNotEmpty());
+                .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.data.refreshToken").isNotEmpty())
+                .andReturn();
+
+        JsonNode data = objectMapper.readTree(result.getResponse().getContentAsString()).path("data");
+        String accessToken = data.path("accessToken").asText();
+        String refreshToken = data.path("refreshToken").asText();
+        assertThat(accessToken).isNotEqualTo(refreshToken);
+
+        Claims accessClaims = jwtUtils.parseToken(accessToken);
+        Claims refreshClaims = jwtUtils.parseToken(refreshToken);
+        assertThat(accessClaims.getId()).isNotEqualTo(refreshClaims.getId());
+        assertThat(accessClaims.get("tokenType", String.class)).isEqualTo("access");
+        assertThat(refreshClaims.get("tokenType", String.class)).isEqualTo("refresh");
     }
 
     @Test
@@ -128,6 +154,77 @@ class UserIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.username").value("alice"));
+    }
+
+    @Test
+    void refreshTokenCannotAccessMe() throws Exception {
+        Tokens tokens = registerAndLoginTokens("alice", "13800000001");
+        mockMvc.perform(get("/user/me").header("Authorization", "Bearer " + tokens.refreshToken()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void refreshSuccess() throws Exception {
+        Tokens tokens = registerAndLoginTokens("alice", "13800000001");
+        MvcResult result = mockMvc.perform(post("/user/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(refresh(tokens.refreshToken()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
+                .andReturn();
+        String newAccessToken = objectMapper.readTree(result.getResponse().getContentAsString())
+                .path("data").path("accessToken").asText();
+        mockMvc.perform(get("/user/me").header("Authorization", "Bearer " + newAccessToken))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void refreshDoesNotNeedAccessToken() throws Exception {
+        Tokens tokens = registerAndLoginTokens("alice", "13800000001");
+        mockMvc.perform(post("/user/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(refresh(tokens.refreshToken()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.accessToken").isNotEmpty());
+    }
+
+    @Test
+    void refreshWithExpiredTokenFails() throws Exception {
+        long userId = registerReturningUserId("alice", "13800000001");
+        String expiredRefresh = tokenWithTtl(userId, null, "refresh", -1000L);
+        mockMvc.perform(post("/user/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(refresh(expiredRefresh))))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void refreshWithBlacklistedTokenFails() throws Exception {
+        Tokens tokens = registerAndLoginTokens("alice", "13800000001");
+        String refreshToken = tokens.refreshToken();
+        jwtBlacklistService.blacklistRefresh(jwtUtils.getJti(refreshToken), 1000L);
+        mockMvc.perform(post("/user/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(refresh(refreshToken))))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void logoutInvalidatesBothTokens() throws Exception {
+        Tokens tokens = registerAndLoginTokens("alice", "13800000001");
+        mockMvc.perform(post("/user/logout")
+                        .header("Authorization", "Bearer " + tokens.accessToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(logout(tokens.refreshToken()))))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/user/me").header("Authorization", "Bearer " + tokens.accessToken()))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/user/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(refresh(tokens.refreshToken()))))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -198,35 +295,6 @@ class UserIntegrationTest {
     }
 
     @Test
-    void refreshSuccess() throws Exception {
-        long userId = registerReturningUserId("alice", "13800000001");
-        String shortToken = tokenWithTtl(userId, 0, 30 * 60 * 1000L);
-        mockMvc.perform(post("/user/refresh").header("Authorization", "Bearer " + shortToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.token").isNotEmpty());
-    }
-
-    @Test
-    void refreshNotAllowedWhenRemainingGt1h() throws Exception {
-        long userId = registerReturningUserId("alice", "13800000001");
-        String longToken = tokenWithTtl(userId, 0, 90 * 60 * 1000L);
-        mockMvc.perform(post("/user/refresh").header("Authorization", "Bearer " + longToken))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(30005));
-    }
-
-    @Test
-    void refreshInvalidatesOldToken() throws Exception {
-        long userId = registerReturningUserId("alice", "13800000001");
-        String shortToken = tokenWithTtl(userId, 0, 30 * 60 * 1000L);
-        mockMvc.perform(post("/user/refresh").header("Authorization", "Bearer " + shortToken))
-                .andExpect(status().isOk());
-        mockMvc.perform(get("/user/me").header("Authorization", "Bearer " + shortToken))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
     void addressLogicalDelete() throws Exception {
         String token = registerAndLogin("alice", "13800000001");
         long addressId = createAddress(token, "张三", "13811111111");
@@ -257,6 +325,9 @@ class UserIntegrationTest {
                 .andExpect(jsonPath("$.data.avatarUrl").value("http://img/a.png"));
     }
 
+    private record Tokens(String accessToken, String refreshToken) {
+    }
+
     private long createAddress(String token, String name, String phone) throws Exception {
         MvcResult created = mockMvc.perform(post("/user/address")
                         .header("Authorization", "Bearer " + token)
@@ -276,14 +347,18 @@ class UserIntegrationTest {
     }
 
     private String registerAndLogin(String username, String phone) throws Exception {
+        return registerAndLoginTokens(username, phone).accessToken();
+    }
+
+    private Tokens registerAndLoginTokens(String username, String phone) throws Exception {
         registerByHttp(username, phone);
         MvcResult result = mockMvc.perform(post("/user/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(login(username, "123456"))))
                 .andExpect(status().isOk())
                 .andReturn();
-        return objectMapper.readTree(result.getResponse().getContentAsString())
-                .path("data").path("token").asText();
+        JsonNode data = objectMapper.readTree(result.getResponse().getContentAsString()).path("data");
+        return new Tokens(data.path("accessToken").asText(), data.path("refreshToken").asText());
     }
 
     private long registerReturningUserId(String username, String phone) throws Exception {
@@ -296,16 +371,18 @@ class UserIntegrationTest {
                 .path("data").path("id").asLong();
     }
 
-    private String tokenWithTtl(Long userId, Integer role, long ttlMillis) {
+    private String tokenWithTtl(Long userId, Integer role, String tokenType, long ttlMillis) {
         SecretKey key = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
-        return Jwts.builder()
+        JwtBuilder builder = Jwts.builder()
                 .id(UUID.randomUUID().toString())
                 .subject(String.valueOf(userId))
-                .claim("role", role)
+                .claim("tokenType", tokenType)
                 .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + ttlMillis))
-                .signWith(key)
-                .compact();
+                .expiration(new Date(System.currentTimeMillis() + ttlMillis));
+        if (role != null) {
+            builder.claim("role", role);
+        }
+        return builder.signWith(key).compact();
     }
 
     private UpdateProfileDTO updateProfile(String nickname, String avatarUrl) {
@@ -327,6 +404,18 @@ class UserIntegrationTest {
         LoginDTO dto = new LoginDTO();
         dto.setAccount(account);
         dto.setPassword(password);
+        return dto;
+    }
+
+    private RefreshDTO refresh(String refreshToken) {
+        RefreshDTO dto = new RefreshDTO();
+        dto.setRefreshToken(refreshToken);
+        return dto;
+    }
+
+    private LogoutDTO logout(String refreshToken) {
+        LogoutDTO dto = new LogoutDTO();
+        dto.setRefreshToken(refreshToken);
         return dto;
     }
 

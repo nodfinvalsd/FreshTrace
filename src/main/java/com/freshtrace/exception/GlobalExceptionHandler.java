@@ -3,6 +3,7 @@ package com.freshtrace.exception;
 import com.freshtrace.common.BizException;
 import com.freshtrace.common.ErrorCode;
 import com.freshtrace.common.R;
+import io.jsonwebtoken.JwtException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
@@ -26,7 +27,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BizException.class)
     public ResponseEntity<R<Void>> handleBizException(BizException e) {
         log.warn("业务异常: {}", e.getMessage());
+        if (ErrorCode.UNAUTHORIZED.getCode().equals(e.getCode())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(R.fail(e.getCode(), e.getMessage()));
+        }
         return ResponseEntity.badRequest().body(R.fail(e.getCode(), e.getMessage()));
+    }
+
+    @ExceptionHandler(JwtException.class)
+    public ResponseEntity<R<Void>> handleJwtException(JwtException e) {
+        log.warn("JWT 解析失败: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(R.fail(ErrorCode.UNAUTHORIZED));
     }
 
     @ExceptionHandler(DuplicateKeyException.class)

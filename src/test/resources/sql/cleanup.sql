@@ -1,3 +1,9 @@
+DELETE FROM t_product_image;
+DELETE FROM t_product_attribute;
+DELETE FROM t_product;
+DELETE FROM t_spu_attribute;
+DELETE FROM t_spu;
+DELETE FROM t_category;
 DELETE FROM t_farmer;
 DELETE FROM t_address;
 DELETE FROM t_user;

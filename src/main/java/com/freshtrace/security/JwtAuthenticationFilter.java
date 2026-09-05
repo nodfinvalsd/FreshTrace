@@ -30,7 +30,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String token = header.substring(7);
             try {
                 Claims claims = jwtUtils.parseToken(token);
-                if (jwtBlacklistService.isBlacklisted(claims.getId())) {
+                String tokenType = claims.get("tokenType", String.class);
+                if (!JwtUtils.TOKEN_TYPE_ACCESS.equals(tokenType)
+                        || jwtBlacklistService.isAccessBlacklisted(claims.getId())) {
                     UserContext.clear();
                 } else {
                     Long userId = Long.valueOf(claims.getSubject());

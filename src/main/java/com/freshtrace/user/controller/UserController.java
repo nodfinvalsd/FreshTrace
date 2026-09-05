@@ -5,10 +5,13 @@ import com.freshtrace.common.ErrorCode;
 import com.freshtrace.common.R;
 import com.freshtrace.security.UserContext;
 import com.freshtrace.user.dto.LoginDTO;
+import com.freshtrace.user.dto.LogoutDTO;
+import com.freshtrace.user.dto.RefreshDTO;
 import com.freshtrace.user.dto.RegisterDTO;
 import com.freshtrace.user.dto.UpdateProfileDTO;
 import com.freshtrace.user.service.UserService;
 import com.freshtrace.user.vo.LoginVO;
+import com.freshtrace.user.vo.RefreshVO;
 import com.freshtrace.user.vo.UserVO;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -38,8 +41,14 @@ public class UserController {
     }
 
     @PostMapping("/refresh")
-    public R<LoginVO> refresh(HttpServletRequest request) {
-        return R.ok(userService.refresh(resolveToken(request)));
+    public R<RefreshVO> refresh(@Valid @RequestBody RefreshDTO dto) {
+        return R.ok(userService.refresh(dto.getRefreshToken()));
+    }
+
+    @PostMapping("/logout")
+    public R<Void> logout(HttpServletRequest request, @RequestBody LogoutDTO dto) {
+        userService.logout(resolveToken(request), dto.getRefreshToken());
+        return R.ok();
     }
 
     @GetMapping("/me")

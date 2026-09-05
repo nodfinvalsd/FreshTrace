@@ -241,7 +241,7 @@ class FarmerIntegrationTest {
         applyByHttp(token, apply("张三", "110101199001011234"));
         long farmerId = farmerIdByRealName("张三");
         long adminId = createAdminId();
-        String adminToken = jwtUtils.generateToken(adminId, 1);
+        String adminToken = jwtUtils.generateAccessToken(adminId, 1);
 
         mockMvc.perform(post("/admin/farmer/audit")
                         .header("Authorization", "Bearer " + adminToken)
@@ -262,7 +262,7 @@ class FarmerIntegrationTest {
         applyByHttp(token, apply("张三", "110101199001011234"));
         long farmerId = farmerIdByRealName("张三");
         long adminId = createAdminId();
-        String adminToken = jwtUtils.generateToken(adminId, 1);
+        String adminToken = jwtUtils.generateAccessToken(adminId, 1);
 
         mockMvc.perform(post("/admin/farmer/audit")
                         .header("Authorization", "Bearer " + adminToken)
@@ -285,7 +285,7 @@ class FarmerIntegrationTest {
     }
 
     private String createAdmin() {
-        return jwtUtils.generateToken(createAdminId(), 1);
+        return jwtUtils.generateAccessToken(createAdminId(), 1);
     }
 
     private long createAdminId() {
@@ -326,7 +326,7 @@ class FarmerIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString())
-                .path("data").path("token").asText();
+                .path("data").path("accessToken").asText();
     }
 
     private FarmerApplyDTO apply(String realName, String idCard) {

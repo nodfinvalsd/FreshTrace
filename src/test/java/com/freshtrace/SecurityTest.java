@@ -36,14 +36,14 @@ class SecurityTest {
 
     @Test
     void wrongRoleReturns403() throws Exception {
-        String token = jwtUtils.generateToken(100L, 0);
+        String token = jwtUtils.generateAccessToken(100L, 0);
         mockMvc.perform(get("/auth-test/admin").header("Authorization", "Bearer " + token))
                 .andExpect(status().isForbidden());
     }
 
     @Test
     void correctRoleReturns200() throws Exception {
-        String token = jwtUtils.generateToken(100L, 1);
+        String token = jwtUtils.generateAccessToken(100L, 1);
         mockMvc.perform(get("/auth-test/admin").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0));

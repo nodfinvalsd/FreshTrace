@@ -5,13 +5,9 @@ import lombok.Data;
 
 @Data
 @AllArgsConstructor
-public class LoginVO {
+public class RefreshVO {
 
     private String accessToken;
 
-    private String refreshToken;
-
     private long accessExpire;
-
-    private long refreshExpire;
 }

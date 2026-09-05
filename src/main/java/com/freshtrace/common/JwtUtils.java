@@ -1,6 +1,7 @@
 package com.freshtrace.common;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtBuilder;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,27 +15,43 @@ import java.util.UUID;
 @Component
 public class JwtUtils {
 
+    public static final String TOKEN_TYPE_ACCESS = "access";
+    public static final String TOKEN_TYPE_REFRESH = "refresh";
+
     @Value("${jwt.secret}")
     private String secret;
 
-    @Value("${jwt.expire}")
-    private long expire;
+    @Value("${jwt.access-expire}")
+    private long accessExpire;
+
+    @Value("${jwt.refresh-expire}")
+    private long refreshExpire;
 
     private SecretKey key() {
         return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
-    public String generateToken(Long userId, Integer role) {
+    public String generateAccessToken(Long userId, Integer role) {
+        return buildToken(userId, role, TOKEN_TYPE_ACCESS, accessExpire);
+    }
+
+    public String generateRefreshToken(Long userId) {
+        return buildToken(userId, null, TOKEN_TYPE_REFRESH, refreshExpire);
+    }
+
+    private String buildToken(Long userId, Integer role, String tokenType, long expireSeconds) {
         Date now = new Date();
-        Date expiry = new Date(now.getTime() + expire * 1000);
-        return Jwts.builder()
+        Date expiry = new Date(now.getTime() + expireSeconds * 1000);
+        JwtBuilder builder = Jwts.builder()
                 .id(UUID.randomUUID().toString())
                 .subject(String.valueOf(userId))
-                .claim("role", role)
+                .claim("tokenType", tokenType)
                 .issuedAt(now)
-                .expiration(expiry)
-                .signWith(key())
-                .compact();
+                .expiration(expiry);
+        if (role != null) {
+            builder.claim("role", role);
+        }
+        return builder.signWith(key()).compact();
     }
 
     public Claims parseToken(String token) {
@@ -53,7 +70,15 @@ public class JwtUtils {
         return parseToken(token).getId();
     }
 
-    public long getExpireSeconds() {
-        return expire;
+    public String getTokenType(String token) {
+        return parseToken(token).get("tokenType", String.class);
+    }
+
+    public long getAccessExpireSeconds() {
+        return accessExpire;
+    }
+
+    public long getRefreshExpireSeconds() {
+        return refreshExpire;
     }
 }

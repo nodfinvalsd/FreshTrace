@@ -27,6 +27,20 @@ public enum ErrorCode {
     FARMER_AUDIT_STATUS_INVALID(30009, "审核状态非法"),
     FARMER_AUDIT_NOT_PENDING(30010, "该认证已审核，不能重复审核"),
 
+    CATEGORY_NOT_FOUND(30011, "品类不存在"),
+    CATEGORY_NAME_DUPLICATE(30012, "品类名称已存在"),
+    CATEGORY_DELETE_FAILED(30013, "该品类下存在 SPU，无法删除"),
+    SPU_NOT_FOUND(30014, "SPU 不存在"),
+    SPU_CATEGORY_NOT_FOUND(30015, "SPU 所属品类不存在"),
+
+    PRODUCT_NOT_FOUND(30016, "商品不存在"),
+    PRODUCT_SPU_NOT_FOUND(30017, "商品关联的 SPU 不存在"),
+    PRODUCT_PERMISSION_DENIED(30018, "无权操作该商品"),
+    PRODUCT_STATUS_INVALID(30019, "商品状态转换不合法"),
+    PRODUCT_AUDIT_NOT_PENDING(30020, "该商品已审核，不能重复审核"),
+    PRODUCT_AUDIT_REASON_REQUIRED(30021, "驳回时必须填写审核意见"),
+    PRODUCT_VERSION_CONFLICT(30022, "商品已被他人修改，请刷新后重试"),
+
     SYSTEM_ERROR(99999, "系统内部错误");
 
     private final Integer code;

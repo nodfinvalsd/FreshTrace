@@ -12,6 +12,7 @@ import com.freshtrace.user.entity.User;
 import com.freshtrace.user.mapper.UserMapper;
 import com.freshtrace.user.service.UserService;
 import com.freshtrace.user.vo.LoginVO;
+import com.freshtrace.user.vo.RefreshVO;
 import com.freshtrace.user.vo.UserVO;
 import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
@@ -19,13 +20,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.util.Date;
-
 @Service
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
-
-    private static final long REFRESH_WINDOW_SECONDS = 3600L;
 
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
@@ -66,23 +63,28 @@ public class UserServiceImpl implements UserService {
         if (user.getStatus() != null && user.getStatus() == 0) {
             throw new BizException(ErrorCode.USER_DISABLED);
         }
-        String token = jwtUtils.generateToken(user.getId(), user.getRole());
-        return new LoginVO(token, jwtUtils.getExpireSeconds());
+        String accessToken = jwtUtils.generateAccessToken(user.getId(), user.getRole());
+        String refreshToken = jwtUtils.generateRefreshToken(user.getId());
+        return new LoginVO(accessToken, refreshToken,
+                jwtUtils.getAccessExpireSeconds(), jwtUtils.getRefreshExpireSeconds());
     }
 
     @Override
-    public LoginVO refresh(String token) {
-        Claims claims = jwtUtils.parseToken(token);
-        Date expiration = claims.getExpiration();
-        long remainingSeconds = (expiration.getTime() - System.currentTimeMillis()) / 1000;
-        if (remainingSeconds >= REFRESH_WINDOW_SECONDS) {
-            throw new BizException(ErrorCode.TOKEN_NOT_REFRESHABLE);
+    public RefreshVO refresh(String refreshToken) {
+        Claims claims = jwtUtils.parseToken(refreshToken);
+        if (!JwtUtils.TOKEN_TYPE_REFRESH.equals(claims.get("tokenType", String.class))) {
+            throw new BizException(ErrorCode.UNAUTHORIZED);
         }
-        jwtBlacklistService.blacklist(claims.getId(), remainingSeconds);
+        if (jwtBlacklistService.isRefreshBlacklisted(claims.getId())) {
+            throw new BizException(ErrorCode.UNAUTHORIZED);
+        }
         Long userId = Long.valueOf(claims.getSubject());
-        Integer role = claims.get("role", Integer.class);
-        String newToken = jwtUtils.generateToken(userId, role);
-        return new LoginVO(newToken, jwtUtils.getExpireSeconds());
+        User user = userMapper.selectById(userId);
+        if (user == null || (user.getStatus() != null && user.getStatus() == 0)) {
+            throw new BizException(ErrorCode.UNAUTHORIZED);
+        }
+        String newAccessToken = jwtUtils.generateAccessToken(userId, user.getRole());
+        return new RefreshVO(newAccessToken, jwtUtils.getAccessExpireSeconds());
     }
 
     @Override
@@ -108,6 +110,20 @@ public class UserServiceImpl implements UserService {
         }
         userMapper.updateById(user);
         return toVO(user);
+    }
+
+    @Override
+    public void logout(String accessToken, String refreshToken) {
+        Claims accessClaims = jwtUtils.parseToken(accessToken);
+        jwtBlacklistService.blacklistAccess(accessClaims.getId(), remainingSeconds(accessClaims));
+        if (StringUtils.hasText(refreshToken)) {
+            Claims refreshClaims = jwtUtils.parseToken(refreshToken);
+            jwtBlacklistService.blacklistRefresh(refreshClaims.getId(), remainingSeconds(refreshClaims));
+        }
+    }
+
+    private long remainingSeconds(Claims claims) {
+        return (claims.getExpiration().getTime() - System.currentTimeMillis()) / 1000;
     }
 
     private UserVO toVO(User user) {
