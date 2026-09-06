@@ -311,3 +311,22 @@ CREATE TABLE t_review (
     KEY idx_product_id (product_id),
     KEY idx_farmer_id (farmer_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品评价表';
+
+-- ============ Phase 5 溯源系统 ============
+
+DROP TABLE IF EXISTS t_trace_node;
+
+CREATE TABLE t_trace_node (
+    id          BIGINT        NOT NULL COMMENT '溯源节点ID(雪花)',
+    product_id  BIGINT        NOT NULL COMMENT '关联商品ID',
+    node_type   TINYINT       NOT NULL COMMENT '节点类型 1=播种,2=施肥,3=开花,4=套袋,5=成熟,6=采摘,7=发货',
+    title       VARCHAR(100)  NOT NULL COMMENT '节点标题',
+    description TEXT                   DEFAULT NULL COMMENT '节点描述',
+    images      VARCHAR(2000)          DEFAULT NULL COMMENT '图片URL列表(JSON)',
+    occurred_at DATE          NOT NULL COMMENT '业务事件实际发生日期',
+    create_time DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '录入时间',
+    update_time DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted     TINYINT       NOT NULL DEFAULT 0 COMMENT '逻辑删除 0=未删 1=已删',
+    PRIMARY KEY (id),
+    KEY idx_product_id_occurred (product_id, occurred_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='溯源节点表';

@@ -1,3 +1,4 @@
+DELETE FROM t_trace_node;
 DELETE FROM t_product_image;
 DELETE FROM t_product_attribute;
 DELETE FROM t_product;

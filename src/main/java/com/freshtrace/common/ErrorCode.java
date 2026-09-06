@@ -60,6 +60,7 @@ public enum ErrorCode {
     REVIEW_NOT_FOUND(30039, "评价不存在"),
     REVIEW_PERMISSION_DENIED(30040, "无权操作该评价"),
     PRODUCT_NOT_IN_SUB_ORDER(30041, "商品不属于该子订单"),
+    TRACE_NODE_NOT_FOUND(30042, "溯源节点不存在"),
 
     SYSTEM_ERROR(99999, "系统内部错误");
 
