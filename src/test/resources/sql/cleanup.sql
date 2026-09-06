@@ -9,6 +9,7 @@ DELETE FROM t_address;
 DELETE FROM t_user;
 DELETE FROM t_order_item;
 DELETE FROM t_refund;
+DELETE FROM t_review;
 DELETE FROM t_sub_order;
 DELETE FROM t_payment;
 DELETE FROM t_order;

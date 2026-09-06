@@ -169,6 +169,7 @@ CREATE TABLE t_product_image (
 
 DROP TABLE IF EXISTS t_order_item;
 DROP TABLE IF EXISTS t_refund;
+DROP TABLE IF EXISTS t_review;
 DROP TABLE IF EXISTS t_sub_order;
 DROP TABLE IF EXISTS t_payment;
 DROP TABLE IF EXISTS t_order;
@@ -288,3 +289,25 @@ CREATE TABLE t_refund (
     KEY idx_farmer_status (farmer_id, status),
     KEY idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='退款表';
+
+-- ============ Phase 4 履约 & 评价 ============
+
+CREATE TABLE t_review (
+    id           BIGINT        NOT NULL COMMENT '评价ID(雪花)',
+    sub_order_id BIGINT        NOT NULL COMMENT '关联子订单ID',
+    product_id   BIGINT        NOT NULL COMMENT '被评价商品ID',
+    user_id      BIGINT        NOT NULL COMMENT '评价人ID(买家)',
+    farmer_id    BIGINT        NOT NULL COMMENT '被评价果农ID',
+    rating       TINYINT       NOT NULL COMMENT '评分(1-5)',
+    content      VARCHAR(1000)          DEFAULT NULL COMMENT '文字评价',
+    images       VARCHAR(2000)          DEFAULT NULL COMMENT '图片URL列表(JSON)',
+    reply        VARCHAR(500)           DEFAULT NULL COMMENT '果农回复',
+    replied_at   DATETIME               DEFAULT NULL COMMENT '回复时间',
+    create_time  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted      TINYINT       NOT NULL DEFAULT 0 COMMENT '逻辑删除 0=未删 1=已删',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_sub_order_product (sub_order_id, product_id),
+    KEY idx_product_id (product_id),
+    KEY idx_farmer_id (farmer_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品评价表';

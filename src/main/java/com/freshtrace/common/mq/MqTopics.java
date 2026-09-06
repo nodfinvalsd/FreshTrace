@@ -19,4 +19,7 @@ public final class MqTopics {
 
     /** ES 数据同步：商品销量/订单数据同步占位（Phase 3 只发送，不实现 ES 消费） */
     public static final String ES_SYNC = "freshtrace-es-sync-topic";
+
+    /** 自动确认收货：发货成功后发送 7 天定时消息（Phase 4 Day 1 只发送，Day 2 实现 Consumer 与定时兜底） */
+    public static final String AUTO_CONFIRM = "freshtrace-auto-confirm-topic";
 }

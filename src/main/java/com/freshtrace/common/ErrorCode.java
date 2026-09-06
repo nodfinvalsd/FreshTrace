@@ -55,6 +55,11 @@ public enum ErrorCode {
     PAYMENT_STATUS_INVALID(30034, "支付状态异常"),
     REFUND_EXISTS(30035, "退款记录已存在"),
     REFUND_STATUS_INVALID(30036, "退款状态异常"),
+    SUB_ORDER_PERMISSION_DENIED(30037, "无权操作该子订单"),
+    REVIEW_EXISTS(30038, "该商品已评价，请勿重复评价"),
+    REVIEW_NOT_FOUND(30039, "评价不存在"),
+    REVIEW_PERMISSION_DENIED(30040, "无权操作该评价"),
+    PRODUCT_NOT_IN_SUB_ORDER(30041, "商品不属于该子订单"),
 
     SYSTEM_ERROR(99999, "系统内部错误");
 

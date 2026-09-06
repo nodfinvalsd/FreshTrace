@@ -19,4 +19,7 @@ public final class MqTags {
 
     /** 库存变更 */
     public static final String STOCK_CHANGED = "stock_changed";
+
+    /** 子订单发货 */
+    public static final String ORDER_SHIPPED = "order_shipped";
 }
