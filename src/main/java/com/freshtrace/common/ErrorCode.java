@@ -74,6 +74,14 @@ public enum ErrorCode {
     PRESALE_RESERVATION_EXISTS(30052, "您已预约该预售，请勿重复预约"),
     PRESALE_RESERVATION_FULL(30053, "该预售预约名额已满"),
 
+    CONVERSATION_NOT_FOUND(30054, "会话不存在"),
+    NOT_CONVERSATION_MEMBER(30055, "无权访问该会话"),
+    CHAT_CONTENT_TOO_LONG(30056, "消息内容过长"),
+    CHAT_SEND_FAILED(30057, "消息发送失败"),
+    IM_TARGET_FARMER_INVALID(30058, "果农不存在或未认证"),
+    IM_SELF_CONVERSATION(30059, "不能与自己的店铺发起会话"),
+    IM_PRODUCT_FARMER_MISMATCH(30060, "商品不属于该果农"),
+
     SYSTEM_ERROR(99999, "系统内部错误");
 
     private final Integer code;

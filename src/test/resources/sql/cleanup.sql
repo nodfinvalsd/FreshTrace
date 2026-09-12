@@ -1,5 +1,7 @@
 DELETE FROM t_presale_reservation;
 DELETE FROM t_presale;
+DELETE FROM t_chat_message;
+DELETE FROM t_conversation;
 DELETE FROM t_post_image;
 DELETE FROM t_post_comment;
 DELETE FROM t_post_like;
