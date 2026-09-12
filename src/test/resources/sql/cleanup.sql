@@ -1,3 +1,9 @@
+DELETE FROM t_presale_reservation;
+DELETE FROM t_presale;
+DELETE FROM t_post_image;
+DELETE FROM t_post_comment;
+DELETE FROM t_post_like;
+DELETE FROM t_post;
 DELETE FROM t_trace_node;
 DELETE FROM t_product_image;
 DELETE FROM t_product_attribute;

@@ -61,6 +61,18 @@ public enum ErrorCode {
     REVIEW_PERMISSION_DENIED(30040, "无权操作该评价"),
     PRODUCT_NOT_IN_SUB_ORDER(30041, "商品不属于该子订单"),
     TRACE_NODE_NOT_FOUND(30042, "溯源节点不存在"),
+    POST_NOT_FOUND(30043, "动态不存在"),
+    POST_PERMISSION_DENIED(30044, "无权操作该动态"),
+    COMMENT_NOT_FOUND(30045, "评论不存在"),
+
+    PRESALE_NOT_FOUND(30046, "预售配置不存在"),
+    PRESALE_ALREADY_EXISTS(30047, "该商品已设置预售"),
+    PRESALE_STATUS_INVALID(30048, "预售状态不允许该操作"),
+    PRESALE_PERMISSION_DENIED(30049, "无权操作该预售配置"),
+    PRESALE_TIME_INVALID(30050, "预售时间设置不合法"),
+    PRESALE_PRODUCT_NOT_READY(30051, "商品未通过审核或不具备开启预售条件"),
+    PRESALE_RESERVATION_EXISTS(30052, "您已预约该预售，请勿重复预约"),
+    PRESALE_RESERVATION_FULL(30053, "该预售预约名额已满"),
 
     SYSTEM_ERROR(99999, "系统内部错误");
 

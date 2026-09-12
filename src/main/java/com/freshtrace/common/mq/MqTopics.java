@@ -22,4 +22,10 @@ public final class MqTopics {
 
     /** 自动确认收货：发货成功后发送 7 天定时消息（Phase 4 Day 1 只发送，Day 2 实现 Consumer 与定时兜底） */
     public static final String AUTO_CONFIRM = "freshtrace-auto-confirm-topic";
+
+    /** 预售到期：设置预售时按 presale_end - now 发送定时消息（Phase 7 Day 1 只发送，Day 3 实现 Consumer 与定时兜底） */
+    public static final String PRESALE_EXPIRE = "freshtrace-presale-expire-topic";
+
+    /** 预售成熟通知：到期后批量通知预约用户（Phase 7 只发送，Phase 9 通知模块消费写入站内信） */
+    public static final String PRESALE_NOTIFY = "freshtrace-presale-notify-topic";
 }

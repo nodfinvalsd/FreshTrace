@@ -22,4 +22,10 @@ public final class MqTags {
 
     /** 子订单发货 */
     public static final String ORDER_SHIPPED = "order_shipped";
+
+    /** 预售到期 */
+    public static final String PRESALE_EXPIRED = "presale_expired";
+
+    /** 预售成熟通知 */
+    public static final String PRESALE_MATURED = "presale_matured";
 }

@@ -330,3 +330,102 @@ CREATE TABLE t_trace_node (
     PRIMARY KEY (id),
     KEY idx_product_id_occurred (product_id, occurred_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='溯源节点表';
+
+-- ============ Phase 6 动态社区 ============
+
+DROP TABLE IF EXISTS t_post_image;
+DROP TABLE IF EXISTS t_post_comment;
+DROP TABLE IF EXISTS t_post_like;
+DROP TABLE IF EXISTS t_post;
+
+CREATE TABLE t_post (
+    id            BIGINT       NOT NULL COMMENT '动态ID(雪花)',
+    farmer_id     BIGINT       NOT NULL COMMENT '发布果农ID',
+    product_id    BIGINT                DEFAULT NULL COMMENT '关联商品ID',
+    trace_node_id BIGINT                DEFAULT NULL COMMENT '关联溯源节点ID',
+    content       TEXT         NOT NULL COMMENT '正文',
+    like_count    INT          NOT NULL DEFAULT 0 COMMENT '点赞数(冗余)',
+    comment_count INT          NOT NULL DEFAULT 0 COMMENT '评论数(冗余)',
+    create_time   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted       TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除 0=未删 1=已删',
+    PRIMARY KEY (id),
+    KEY idx_farmer_id (farmer_id),
+    KEY idx_product_id (product_id),
+    KEY idx_create_time (create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='动态帖子表';
+
+CREATE TABLE t_post_image (
+    id         BIGINT       NOT NULL COMMENT '主键(雪花)',
+    post_id    BIGINT       NOT NULL COMMENT '帖子ID',
+    image_url  VARCHAR(500) NOT NULL COMMENT '图片URL',
+    sort_order INT          NOT NULL DEFAULT 0 COMMENT '排序(升序)',
+    create_time DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted    TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除 0=未删 1=已删',
+    PRIMARY KEY (id),
+    KEY idx_post_id (post_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='帖子图片表';
+
+CREATE TABLE t_post_comment (
+    id          BIGINT       NOT NULL COMMENT '评论ID(雪花)',
+    post_id     BIGINT       NOT NULL COMMENT '帖子ID',
+    user_id     BIGINT       NOT NULL COMMENT '评论人ID',
+    parent_id   BIGINT                DEFAULT NULL COMMENT '父评论ID',
+    content     VARCHAR(500) NOT NULL COMMENT '评论内容',
+    create_time DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted     TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除 0=未删 1=已删',
+    PRIMARY KEY (id),
+    KEY idx_post_id (post_id),
+    KEY idx_parent_id (parent_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='帖子评论表';
+
+CREATE TABLE t_post_like (
+    id          BIGINT   NOT NULL COMMENT '点赞ID(雪花)',
+    post_id     BIGINT   NOT NULL COMMENT '帖子ID',
+    user_id     BIGINT   NOT NULL COMMENT '点赞人ID',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted     TINYINT  NOT NULL DEFAULT 0 COMMENT '逻辑删除 0=未删 1=已删',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_post_user (post_id, user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='帖子点赞表';
+
+-- ============ Phase 7 预售系统 ============
+
+DROP TABLE IF EXISTS t_presale_reservation;
+DROP TABLE IF EXISTS t_presale;
+
+CREATE TABLE t_presale (
+    id                BIGINT   NOT NULL COMMENT '预售配置ID(雪花)',
+    product_id        BIGINT   NOT NULL COMMENT '关联商品ID(1:1)',
+    farmer_id         BIGINT   NOT NULL COMMENT '所属果农ID',
+    presale_start     DATETIME NOT NULL COMMENT '预售开始时间',
+    presale_end       DATETIME NOT NULL COMMENT '预售截止(预计成熟)时间',
+    expected_harvest  DATETIME          DEFAULT NULL COMMENT '预计成熟采摘时间',
+    max_reservations  INT      NOT NULL DEFAULT 0 COMMENT '最大预约数,0=不限',
+    reservation_count INT      NOT NULL DEFAULT 0 COMMENT '当前预约数(冗余)',
+    status            TINYINT  NOT NULL DEFAULT 1 COMMENT '0=关闭,1=进行中,2=已结束',
+    create_time       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted           TINYINT  NOT NULL DEFAULT 0 COMMENT '逻辑删除 0=未删 1=已删',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_product_id (product_id),
+    KEY idx_farmer_id (farmer_id),
+    KEY idx_status_end (status, presale_end)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='预售配置表';
+
+CREATE TABLE t_presale_reservation (
+    id          BIGINT   NOT NULL COMMENT '预约ID(雪花)',
+    presale_id  BIGINT   NOT NULL COMMENT '预售配置ID',
+    user_id     BIGINT   NOT NULL COMMENT '预约用户ID',
+    quantity    INT      NOT NULL DEFAULT 1 COMMENT '预约数量',
+    notified    TINYINT  NOT NULL DEFAULT 0 COMMENT '成熟后是否已通知 0=否 1=是',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted     TINYINT  NOT NULL DEFAULT 0 COMMENT '逻辑删除 0=未删 1=已删',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_presale_user (presale_id, user_id),
+    KEY idx_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='预售预约表';

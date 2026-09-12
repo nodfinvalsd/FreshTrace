@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.freshtrace.common.BizException;
 import com.freshtrace.common.ErrorCode;
+import com.freshtrace.common.cache.CacheKeys;
 import com.freshtrace.farmer.entity.Farmer;
 import com.freshtrace.farmer.mapper.FarmerMapper;
 import com.freshtrace.product.dto.ProductAttributeDTO;
@@ -32,17 +33,21 @@ import com.freshtrace.product.vo.ProductImageVO;
 import com.freshtrace.product.vo.ProductVO;
 import com.freshtrace.product.vo.SpuVO;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ProductServiceImpl implements ProductService {
 
     private final ProductMapper productMapper;
@@ -51,6 +56,7 @@ public class ProductServiceImpl implements ProductService {
     private final SpuMapper spuMapper;
     private final CategoryMapper categoryMapper;
     private final FarmerMapper farmerMapper;
+    private final StringRedisTemplate stringRedisTemplate;
 
     @Override
     @Transactional
@@ -77,6 +83,7 @@ public class ProductServiceImpl implements ProductService {
 
         saveAttributes(product.getId(), dto.getAttributes());
         saveImages(product.getId(), dto.getImages());
+        evictFarmerHome(farmer.getId());
         return toVO(product);
     }
 
@@ -110,6 +117,14 @@ public class ProductServiceImpl implements ProductService {
         vo.setReviewCount(0);
         vo.setTraceNodeCount(0);
         return vo;
+    }
+
+    @Override
+    public List<ProductVO> batchBrief(Collection<Long> productIds) {
+        if (productIds == null || productIds.isEmpty()) {
+            return List.of();
+        }
+        return productMapper.selectBatchIds(productIds).stream().map(this::toVO).toList();
     }
 
     @Override
@@ -150,6 +165,7 @@ public class ProductServiceImpl implements ProductService {
         if (dto.getImages() != null) {
             saveImages(id, dto.getImages());
         }
+        evictFarmerHome(product.getFarmerId());
         return toVO(product);
     }
 
@@ -172,6 +188,7 @@ public class ProductServiceImpl implements ProductService {
                 .eq(Product::getId, id)
                 .set(Product::getAuditStatus, dto.getAuditStatus())
                 .set(Product::getAuditReason, dto.getAuditStatus() == 1 ? null : dto.getAuditReason()));
+        evictFarmerHome(product.getFarmerId());
     }
 
     @Override
@@ -191,6 +208,7 @@ public class ProductServiceImpl implements ProductService {
                 .eq(Product::getId, id)
                 .set(Product::getLifecycle, target.getCode()));
         product.setLifecycle(target.getCode());
+        evictFarmerHome(product.getFarmerId());
         return toVO(product);
     }
 
@@ -209,6 +227,7 @@ public class ProductServiceImpl implements ProductService {
                 .eq(Product::getId, id)
                 .set(Product::getLifecycle, ProductLifecycle.PLANTING.getCode()));
         product.setLifecycle(ProductLifecycle.PLANTING.getCode());
+        evictFarmerHome(product.getFarmerId());
         return toVO(product);
     }
 
@@ -227,7 +246,86 @@ public class ProductServiceImpl implements ProductService {
                 .eq(Product::getId, id)
                 .set(Product::getLifecycle, ProductLifecycle.ON_SALE.getCode()));
         product.setLifecycle(ProductLifecycle.ON_SALE.getCode());
+        evictFarmerHome(product.getFarmerId());
         return toVO(product);
+    }
+
+    @Override
+    @Transactional
+    public void markPresale(Long productId) {
+        Product product = productMapper.selectById(productId);
+        if (product == null) {
+            throw new BizException(ErrorCode.PRODUCT_NOT_FOUND);
+        }
+        ProductLifecycle current = ProductLifecycle.fromCode(product.getLifecycle());
+        if (current == ProductLifecycle.PRESALE) {
+            return;
+        }
+        if (current == null || !current.canTransitionTo(ProductLifecycle.PRESALE)) {
+            throw new BizException(ErrorCode.PRODUCT_STATUS_INVALID, "商品当前状态不允许开启预售");
+        }
+        productMapper.update(null, new LambdaUpdateWrapper<Product>()
+                .eq(Product::getId, productId)
+                .set(Product::getLifecycle, ProductLifecycle.PRESALE.getCode()));
+        evictFarmerHome(product.getFarmerId());
+    }
+
+    @Override
+    @Transactional
+    public void markPresaleCancelled(Long productId) {
+        Product product = productMapper.selectById(productId);
+        if (product == null) {
+            throw new BizException(ErrorCode.PRODUCT_NOT_FOUND);
+        }
+        if (ProductLifecycle.fromCode(product.getLifecycle()) != ProductLifecycle.PRESALE) {
+            return;
+        }
+        productMapper.update(null, new LambdaUpdateWrapper<Product>()
+                .eq(Product::getId, productId)
+                .set(Product::getLifecycle, ProductLifecycle.PLANTING.getCode()));
+        evictFarmerHome(product.getFarmerId());
+    }
+
+    @Override
+    @Transactional
+    public void markPresaleEnded(Long productId) {
+        Product product = productMapper.selectById(productId);
+        if (product == null) {
+            throw new BizException(ErrorCode.PRODUCT_NOT_FOUND);
+        }
+        ProductLifecycle current = ProductLifecycle.fromCode(product.getLifecycle());
+        if (current == ProductLifecycle.ON_SALE) {
+            return;
+        }
+        if (!canReachOnSale(current)) {
+            throw new BizException(ErrorCode.PRODUCT_STATUS_INVALID, "商品当前状态不允许转为销售中");
+        }
+        productMapper.update(null, new LambdaUpdateWrapper<Product>()
+                .eq(Product::getId, productId)
+                .set(Product::getLifecycle, ProductLifecycle.ON_SALE.getCode()));
+        evictFarmerHome(product.getFarmerId());
+    }
+
+    /**
+     * 校验 from 是否存在满足状态机白名单的链路到达 ON_SALE（PRESALE → RIPE → ON_SALE，或 RIPE → ON_SALE）。
+     */
+    private boolean canReachOnSale(ProductLifecycle from) {
+        ProductLifecycle cursor = from;
+        for (int step = 0; step < ProductLifecycle.values().length && cursor != null; step++) {
+            if (cursor == ProductLifecycle.ON_SALE) {
+                return true;
+            }
+            ProductLifecycle next = switch (cursor) {
+                case PRESALE -> ProductLifecycle.RIPE;
+                case RIPE -> ProductLifecycle.ON_SALE;
+                default -> null;
+            };
+            if (next == null || !cursor.canTransitionTo(next)) {
+                return false;
+            }
+            cursor = next;
+        }
+        return false;
     }
 
     private void applyAuditStatusOnEdit(Product product, boolean sensitiveChanged) {
@@ -333,6 +431,17 @@ public class ProductServiceImpl implements ProductService {
             image.setImageUrl(dto.getImageUrl());
             image.setSortOrder(dto.getSortOrder() == null ? 0 : dto.getSortOrder());
             productImageMapper.insert(image);
+        }
+    }
+
+    /**
+     * 失效果农主页缓存（商品上架/下架/审核/编辑改变主页在售商品展示）。
+     */
+    private void evictFarmerHome(Long farmerId) {
+        try {
+            stringRedisTemplate.delete(CacheKeys.farmerHome(farmerId));
+        } catch (Exception e) {
+            log.warn("invalidate farmer home cache failed, farmerId={}", farmerId, e);
         }
     }
 

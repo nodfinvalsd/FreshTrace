@@ -16,4 +16,12 @@ public final class CacheKeys {
     public static String farmerHome(Long farmerId) {
         return "farmer:home:" + farmerId;
     }
+
+    /**
+     * 预售预约计数 Key（Phase 7）。Redis INCR 仅作写入限流，权威以
+     * {@code COUNT(*) FROM t_presale_reservation} 对账刷新。
+     */
+    public static String presaleCount(Long presaleId) {
+        return "presale:count:" + presaleId;
+    }
 }
