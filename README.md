@@ -86,6 +86,13 @@ Get-ChildItem sql\*.sql | Sort-Object Name | ForEach-Object {
 
 ### 4.4 启动应用
 
+首次需从模板生成本地配置（`application*.yml` 不入库）：
+
+```powershell
+copy src\main\resources\application.yml.example src\main\resources\application.yml
+copy src\main\resources\application-dev.yml.example src\main\resources\application-dev.yml
+```
+
 ```powershell
 .\mvnw.cmd spring-boot:run
 ```
@@ -97,7 +104,11 @@ Get-ChildItem sql\*.sql | Sort-Object Name | ForEach-Object {
 ### 4.5 运行测试
 
 测试依赖本机 MySQL(3307)/Redis/ES/RocketMQ（`test` profile 默认关闭 MQ 与 ES，仅对应专项测试会打开）。
-测试库为 `freshtrace_test`，建表脚本自动执行。
+测试库为 `freshtrace_test`，建表脚本自动执行。首次需生成测试配置：
+
+```powershell
+copy src\test\resources\application-test.yml.example src\test\resources\application-test.yml
+```
 
 ```powershell
 .\mvnw.cmd test
@@ -109,6 +120,7 @@ Get-ChildItem sql\*.sql | Sort-Object Name | ForEach-Object {
 
 ```powershell
 copy .env.example .env   # 填写 MYSQL_ROOT_PASSWORD / JWT_SECRET / AES_KEY
+copy src\main\resources\application-prod.yml.example src\main\resources\application-prod.yml
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
