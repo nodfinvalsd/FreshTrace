@@ -24,4 +24,12 @@ public final class CacheKeys {
     public static String presaleCount(Long presaleId) {
         return "presale:count:" + presaleId;
     }
+
+    /**
+     * 管理端运营仪表板缓存 Key（Phase 10）。缓存聚合统计结果，TTL 60s，
+     * 另有定时任务刷新兜底，避免高并发下反复全表 COUNT。
+     */
+    public static String adminDashboardOverview() {
+        return "admin:dashboard:overview";
+    }
 }

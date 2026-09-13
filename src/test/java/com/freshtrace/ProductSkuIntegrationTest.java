@@ -232,7 +232,7 @@ class ProductSkuIntegrationTest {
         long spuId = createSpu(createCategory("芒果"), "海南红心芒果");
         long productId = createProduct(farmerUserId, spuId, "海南红心芒果 5斤装");
 
-        mockMvc.perform(post("/product/{id}/audit", productId)
+        mockMvc.perform(post("/admin/product/{id}/audit", productId)
                         .header("Authorization", "Bearer " + adminToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(audit(1, null))))
@@ -251,7 +251,7 @@ class ProductSkuIntegrationTest {
         long spuId = createSpu(createCategory("芒果"), "海南红心芒果");
         long productId = createProduct(farmerUserId, spuId, "海南红心芒果 5斤装");
 
-        mockMvc.perform(post("/product/{id}/audit", productId)
+        mockMvc.perform(post("/admin/product/{id}/audit", productId)
                         .header("Authorization", "Bearer " + adminToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(audit(2, "图片不清晰"))))
@@ -271,7 +271,7 @@ class ProductSkuIntegrationTest {
         long spuId = createSpu(createCategory("芒果"), "海南红心芒果");
         long productId = createProduct(farmerUserId, spuId, "海南红心芒果 5斤装");
 
-        mockMvc.perform(post("/product/{id}/audit", productId)
+        mockMvc.perform(post("/admin/product/{id}/audit", productId)
                         .header("Authorization", "Bearer " + adminToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(audit(2, null))))
@@ -285,7 +285,7 @@ class ProductSkuIntegrationTest {
         long spuId = createSpu(createCategory("芒果"), "海南红心芒果");
         long productId = createProduct(farmerUserId, spuId, "海南红心芒果 5斤装");
 
-        mockMvc.perform(post("/product/{id}/audit", productId)
+        mockMvc.perform(post("/admin/product/{id}/audit", productId)
                         .header("Authorization", "Bearer " + userToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(audit(1, null))))
@@ -294,7 +294,7 @@ class ProductSkuIntegrationTest {
 
     @Test
     void unauthenticatedCannotAudit() throws Exception {
-        mockMvc.perform(post("/product/{id}/audit", 1L)
+        mockMvc.perform(post("/admin/product/{id}/audit", 1L)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(audit(1, null))))
                 .andExpect(status().isUnauthorized());
@@ -306,13 +306,13 @@ class ProductSkuIntegrationTest {
         long spuId = createSpu(createCategory("芒果"), "海南红心芒果");
         long productId = createProduct(farmerUserId, spuId, "海南红心芒果 5斤装");
 
-        mockMvc.perform(post("/product/{id}/audit", productId)
+        mockMvc.perform(post("/admin/product/{id}/audit", productId)
                         .header("Authorization", "Bearer " + adminToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(audit(1, null))))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(post("/product/{id}/audit", productId)
+        mockMvc.perform(post("/admin/product/{id}/audit", productId)
                         .header("Authorization", "Bearer " + adminToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(audit(1, null))))
@@ -356,7 +356,7 @@ class ProductSkuIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.auditStatus").value(0));
 
-        mockMvc.perform(post("/product/{id}/audit", productId)
+        mockMvc.perform(post("/admin/product/{id}/audit", productId)
                         .header("Authorization", "Bearer " + adminToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(audit(1, null))))
@@ -379,7 +379,7 @@ class ProductSkuIntegrationTest {
         long spuId = createSpu(createCategory("芒果"), "海南红心芒果");
         long productId = createProduct(farmerUserId, spuId, "海南红心芒果 5斤装");
 
-        mockMvc.perform(post("/product/{id}/audit", productId)
+        mockMvc.perform(post("/admin/product/{id}/audit", productId)
                         .header("Authorization", "Bearer " + adminToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(audit(2, "图片不清晰"))))
@@ -399,7 +399,7 @@ class ProductSkuIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.auditStatus").value(0));
 
-        mockMvc.perform(post("/product/{id}/audit", productId)
+        mockMvc.perform(post("/admin/product/{id}/audit", productId)
                         .header("Authorization", "Bearer " + adminToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(audit(1, null))))
@@ -528,7 +528,7 @@ class ProductSkuIntegrationTest {
         long spuId = createSpu(createCategory("芒果"), "海南红心芒果");
         long productId = createProduct(farmerUserId, spuId, "海南红心芒果 5斤装");
 
-        mockMvc.perform(post("/product/{id}/audit", productId)
+        mockMvc.perform(post("/admin/product/{id}/audit", productId)
                         .header("Authorization", "Bearer " + adminToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(audit(2, "图片不清晰"))))
@@ -688,7 +688,7 @@ class ProductSkuIntegrationTest {
     }
 
     private void approve(long productId) throws Exception {
-        mockMvc.perform(post("/product/{id}/audit", productId)
+        mockMvc.perform(post("/admin/product/{id}/audit", productId)
                         .header("Authorization", "Bearer " + adminToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(audit(1, null))))

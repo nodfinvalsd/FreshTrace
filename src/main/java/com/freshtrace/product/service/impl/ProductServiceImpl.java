@@ -2,13 +2,16 @@ package com.freshtrace.product.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.freshtrace.common.BizException;
 import com.freshtrace.common.ErrorCode;
+import com.freshtrace.common.PageVO;
 import com.freshtrace.common.cache.CacheKeys;
 import com.freshtrace.farmer.entity.Farmer;
 import com.freshtrace.farmer.mapper.FarmerMapper;
 import com.freshtrace.product.dto.ProductAttributeDTO;
 import com.freshtrace.product.dto.ProductAuditDTO;
+import com.freshtrace.product.dto.ProductAuditQueryDTO;
 import com.freshtrace.product.dto.ProductCreateDTO;
 import com.freshtrace.product.dto.ProductImageDTO;
 import com.freshtrace.product.dto.ProductLifecycleUpdateDTO;
@@ -25,6 +28,7 @@ import com.freshtrace.product.mapper.ProductImageMapper;
 import com.freshtrace.product.mapper.ProductMapper;
 import com.freshtrace.product.mapper.SpuMapper;
 import com.freshtrace.product.service.ProductService;
+import com.freshtrace.product.vo.AdminProductVO;
 import com.freshtrace.product.vo.CategoryVO;
 import com.freshtrace.product.vo.FarmerVO;
 import com.freshtrace.product.vo.ProductAttributeVO;
@@ -43,7 +47,10 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -189,6 +196,44 @@ public class ProductServiceImpl implements ProductService {
                 .set(Product::getAuditStatus, dto.getAuditStatus())
                 .set(Product::getAuditReason, dto.getAuditStatus() == 1 ? null : dto.getAuditReason()));
         evictFarmerHome(product.getFarmerId());
+    }
+
+    @Override
+    public PageVO<AdminProductVO> pageForAdmin(ProductAuditQueryDTO query) {
+        Page<Product> page = new Page<>(query.getPage(), query.getSize());
+        // 待审核(0) 排前，其余按提交时间倒序，便于管理员优先处理
+        productMapper.selectPage(page, new LambdaQueryWrapper<Product>()
+                .eq(query.getAuditStatus() != null, Product::getAuditStatus, query.getAuditStatus())
+                .orderByAsc(Product::getAuditStatus)
+                .orderByDesc(Product::getCreateTime));
+        List<Product> products = page.getRecords();
+        if (products.isEmpty()) {
+            return PageVO.empty(query.getPage(), query.getSize());
+        }
+        // 批量装配 SPU / 品类 / 果农，避免 N+1
+        List<Long> spuIds = products.stream().map(Product::getSpuId).filter(Objects::nonNull).distinct().toList();
+        Map<Long, Spu> spuMap = spuIds.isEmpty() ? Map.of()
+                : spuMapper.selectBatchIds(spuIds).stream().collect(Collectors.toMap(Spu::getId, Function.identity()));
+        List<Long> categoryIds = spuMap.values().stream().map(Spu::getCategoryId).filter(Objects::nonNull).distinct().toList();
+        Map<Long, Category> categoryMap = categoryIds.isEmpty() ? Map.of()
+                : categoryMapper.selectBatchIds(categoryIds).stream().collect(Collectors.toMap(Category::getId, Function.identity()));
+        List<Long> farmerIds = products.stream().map(Product::getFarmerId).filter(Objects::nonNull).distinct().toList();
+        Map<Long, Farmer> farmerMap = farmerIds.isEmpty() ? Map.of()
+                : farmerMapper.selectBatchIds(farmerIds).stream().collect(Collectors.toMap(Farmer::getId, Function.identity()));
+
+        List<AdminProductVO> records = products.stream().map(product -> {
+            AdminProductVO vo = new AdminProductVO();
+            copyToVO(product, vo);
+            Spu spu = spuMap.get(product.getSpuId());
+            Category category = spu == null ? null : categoryMap.get(spu.getCategoryId());
+            Farmer farmer = farmerMap.get(product.getFarmerId());
+            vo.setSpuName(spu == null ? null : spu.getName());
+            vo.setCategoryName(category == null ? null : category.getName());
+            vo.setFarmerName(farmer == null ? null : farmer.getRealName());
+            vo.setOrchardName(farmer == null ? null : farmer.getOrchardName());
+            return vo;
+        }).toList();
+        return PageVO.of(page, records);
     }
 
     @Override

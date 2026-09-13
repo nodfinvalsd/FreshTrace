@@ -82,6 +82,19 @@ public enum ErrorCode {
     IM_SELF_CONVERSATION(30059, "不能与自己的店铺发起会话"),
     IM_PRODUCT_FARMER_MISMATCH(30060, "商品不属于该果农"),
 
+    NOTIFICATION_NOT_FOUND(30061, "通知不存在"),
+    NOTIFICATION_PERMISSION_DENIED(30062, "无权操作该通知"),
+
+    REFUND_NOT_FOUND(30063, "退款记录不存在"),
+    REFUND_AFTER_SALE_EXPIRED(30064, "已超过7天售后期限"),
+    REFUND_PERMISSION_DENIED(30065, "无权处理该退款"),
+    REFUND_HANDLE_STATUS_INVALID(30066, "退款状态不允许该操作"),
+
+    REPORT_NOT_FOUND(30067, "举报记录不存在"),
+    REPORT_ALREADY_HANDLED(30068, "举报已处理，请勿重复操作"),
+    REPORT_STATUS_INVALID(30069, "举报处理结论不合法"),
+    REPORT_TARGET_TYPE_INVALID(30070, "举报对象类型不合法"),
+
     SYSTEM_ERROR(99999, "系统内部错误");
 
     private final Integer code;

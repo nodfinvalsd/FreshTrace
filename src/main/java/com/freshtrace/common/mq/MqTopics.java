@@ -28,4 +28,7 @@ public final class MqTopics {
 
     /** 预售成熟通知：到期后批量通知预约用户（Phase 7 只发送，Phase 9 通知模块消费写入站内信） */
     public static final String PRESALE_NOTIFY = "freshtrace-presale-notify-topic";
+
+    /** 买家侧业务通知：发货/确认收货/评价回复等事件（Phase 9 新增，通知模块消费写入站内信） */
+    public static final String NOTIFICATION = "freshtrace-notification-topic";
 }

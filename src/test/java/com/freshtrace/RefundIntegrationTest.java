@@ -10,6 +10,8 @@ import com.freshtrace.product.mapper.SpuMapper;
 import com.freshtrace.trade.dto.CreateOrderDTO;
 import com.freshtrace.trade.dto.PayOrderDTO;
 import com.freshtrace.trade.dto.RefundApplyDTO;
+import com.freshtrace.trade.dto.RefundArbitrateDTO;
+import com.freshtrace.trade.dto.RefundHandleDTO;
 import com.freshtrace.trade.entity.ShoppingCart;
 import com.freshtrace.trade.mapper.ShoppingCartMapper;
 import com.freshtrace.trade.service.PaymentService;
@@ -36,6 +38,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -177,7 +180,7 @@ class RefundIntegrationTest {
     }
 
     @Test
-    void c3RefundShippedOrderFails() throws Exception {
+    void c3RefundShippedOrderCreatesAfterSaleTicketAndKeepsStock() throws Exception {
         long userId = 900001L;
         long farmerId = createFarmer();
         long productId = createProduct(farmerId, "20.00", 100);
@@ -186,16 +189,22 @@ class RefundIntegrationTest {
         String orderNo = createOrderViaApi(userId, addressId, List.of(cartId));
         String subOrderNo = queryString("SELECT sub_order_no FROM t_sub_order");
         pay(userId, orderNo);
+        // 模拟果农已发货：子订单进入待收货
         jdbcTemplate.update("UPDATE t_sub_order SET status = 2 WHERE sub_order_no = ?", subOrderNo);
 
         mockMvc.perform(post("/refund/{subOrderNo}", subOrderNo)
                         .header("Authorization", "Bearer " + token(userId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(refund("不想要了"))))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(30036));
+                        .content(json(refund("商品不符合预期"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.refundNo").isNotEmpty())
+                .andExpect(jsonPath("$.data.status").value(0));
 
-        assertThat(count("SELECT COUNT(*) FROM t_refund")).isZero();
+        // 创建售后工单（待处理），子订单转退款中；货已发出，不恢复库存
+        assertThat(count("SELECT COUNT(*) FROM t_refund")).isEqualTo(1);
+        assertThat(queryInt("SELECT status FROM t_refund")).isZero();
+        assertThat(queryInt("SELECT status FROM t_sub_order")).isEqualTo(4);
         assertThat(productMapper.selectById(productId).getStock()).isEqualTo(98);
     }
 
@@ -251,6 +260,190 @@ class RefundIntegrationTest {
         assertThat(count("SELECT COUNT(*) FROM t_refund")).isEqualTo(1);
         assertThat(productMapper.selectById(productId).getStock()).isEqualTo(100);
         assertThat(stringRedisTemplate.opsForValue().get("stock:product:" + productId)).isEqualTo("100");
+    }
+
+    @Test
+    void c6FarmerApproveAfterSaleRefunds() throws Exception {
+        long userId = 900001L;
+        long farmerId = createFarmer();
+        long farmerUserId = farmerUserId(farmerId);
+        long productId = createProduct(farmerId, "20.00", 100);
+        long addressId = createAddress(userId);
+        long cartId = addCart(userId, productId, 2);
+        String orderNo = createOrderViaApi(userId, addressId, List.of(cartId));
+        String subOrderNo = queryString("SELECT sub_order_no FROM t_sub_order");
+        pay(userId, orderNo);
+        jdbcTemplate.update("UPDATE t_sub_order SET status = 2 WHERE sub_order_no = ?", subOrderNo);
+        applyAfterSale(userId, subOrderNo);
+        long refundId = queryLong("SELECT id FROM t_refund");
+
+        mockMvc.perform(post("/farmer/refund/{id}/approve", refundId)
+                        .header("Authorization", "Bearer " + token(farmerUserId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(handle("同意退款"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value(4));
+
+        // 退款单已退款、子订单已退款；货已发出，不恢复库存
+        assertThat(queryInt("SELECT status FROM t_refund")).isEqualTo(4);
+        assertThat(queryInt("SELECT status FROM t_sub_order")).isEqualTo(5);
+        assertThat(productMapper.selectById(productId).getStock()).isEqualTo(98);
+    }
+
+    @Test
+    void c7FarmerRejectThenAdminArbitrateRefunds() throws Exception {
+        long userId = 900001L;
+        long farmerId = createFarmer();
+        long farmerUserId = farmerUserId(farmerId);
+        long productId = createProduct(farmerId, "20.00", 100);
+        long addressId = createAddress(userId);
+        long cartId = addCart(userId, productId, 2);
+        String orderNo = createOrderViaApi(userId, addressId, List.of(cartId));
+        String subOrderNo = queryString("SELECT sub_order_no FROM t_sub_order");
+        pay(userId, orderNo);
+        jdbcTemplate.update("UPDATE t_sub_order SET status = 2 WHERE sub_order_no = ?", subOrderNo);
+        applyAfterSale(userId, subOrderNo);
+        long refundId = queryLong("SELECT id FROM t_refund");
+
+        // 果农拒绝 → 退款单果农拒绝(2)，子订单恢复待收货(2)
+        mockMvc.perform(post("/farmer/refund/{id}/reject", refundId)
+                        .header("Authorization", "Bearer " + token(farmerUserId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(handle("商品无问题"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value(2));
+        // 果农拒绝后子订单保持退款中，等待平台仲裁（不立即恢复）
+        assertThat(queryInt("SELECT status FROM t_sub_order")).isEqualTo(4);
+
+        // 平台仲裁同意 → 退款单已退款(4)，子订单已退款(5)
+        long adminUserId = createAdminUser();
+        RefundArbitrateDTO dto = new RefundArbitrateDTO();
+        dto.setApprove(true);
+        dto.setHandleReason("判定退款成立");
+        mockMvc.perform(post("/admin/refund/{id}/arbitrate", refundId)
+                        .header("Authorization", "Bearer " + adminToken(adminUserId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(dto)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value(4));
+
+        assertThat(queryInt("SELECT status FROM t_refund")).isEqualTo(4);
+        assertThat(queryInt("SELECT status FROM t_sub_order")).isEqualTo(5);
+    }
+
+    @Test
+    void c7bAdminArbitrateRejectRestoresSubOrder() throws Exception {
+        long userId = 900001L;
+        long farmerId = createFarmer();
+        long farmerUserId = farmerUserId(farmerId);
+        long productId = createProduct(farmerId, "20.00", 100);
+        long addressId = createAddress(userId);
+        long cartId = addCart(userId, productId, 2);
+        String orderNo = createOrderViaApi(userId, addressId, List.of(cartId));
+        String subOrderNo = queryString("SELECT sub_order_no FROM t_sub_order");
+        pay(userId, orderNo);
+        jdbcTemplate.update("UPDATE t_sub_order SET status = 2 WHERE sub_order_no = ?", subOrderNo);
+        applyAfterSale(userId, subOrderNo);
+        long refundId = queryLong("SELECT id FROM t_refund");
+
+        mockMvc.perform(post("/farmer/refund/{id}/reject", refundId)
+                        .header("Authorization", "Bearer " + token(farmerUserId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(handle("商品无问题"))))
+                .andExpect(status().isOk());
+
+        long adminUserId = createAdminUser();
+        RefundArbitrateDTO dto = new RefundArbitrateDTO();
+        dto.setApprove(false);
+        dto.setHandleReason("证据不足，驳回");
+        mockMvc.perform(post("/admin/refund/{id}/arbitrate", refundId)
+                        .header("Authorization", "Bearer " + adminToken(adminUserId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(dto)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value(5));
+
+        // 仲裁驳回：退款单已驳回(5)，子订单恢复待收货(2)
+        assertThat(queryInt("SELECT status FROM t_refund")).isEqualTo(5);
+        assertThat(queryInt("SELECT status FROM t_sub_order")).isEqualTo(2);
+
+        // 管理端工单详情与列表
+        mockMvc.perform(get("/admin/refund/{id}", refundId)
+                        .header("Authorization", "Bearer " + adminToken(adminUserId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.refundNo").isNotEmpty())
+                .andExpect(jsonPath("$.data.statusDesc").isNotEmpty());
+
+        mockMvc.perform(get("/admin/refund/list")
+                        .header("Authorization", "Bearer " + adminToken(adminUserId))
+                        .param("status", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1));
+    }
+
+    @Test
+    void c8FinishedOrderOutsideAfterSaleWindowFails() throws Exception {
+        long userId = 900001L;
+        long farmerId = createFarmer();
+        long productId = createProduct(farmerId, "20.00", 100);
+        long addressId = createAddress(userId);
+        long cartId = addCart(userId, productId, 2);
+        String orderNo = createOrderViaApi(userId, addressId, List.of(cartId));
+        String subOrderNo = queryString("SELECT sub_order_no FROM t_sub_order");
+        pay(userId, orderNo);
+        // 已完成且收货时间超过 7 天
+        jdbcTemplate.update("UPDATE t_sub_order SET status = 3, received_at = DATE_SUB(NOW(), INTERVAL 8 DAY) "
+                + "WHERE sub_order_no = ?", subOrderNo);
+
+        mockMvc.perform(post("/refund/{subOrderNo}", subOrderNo)
+                        .header("Authorization", "Bearer " + token(userId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(refund("超过售后期"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(30064));
+
+        assertThat(count("SELECT COUNT(*) FROM t_refund")).isZero();
+    }
+
+    private void applyAfterSale(long userId, String subOrderNo) throws Exception {
+        mockMvc.perform(post("/refund/{subOrderNo}", subOrderNo)
+                        .header("Authorization", "Bearer " + token(userId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(refund("售后申请"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value(0));
+    }
+
+    private RefundHandleDTO handle(String reason) {
+        RefundHandleDTO dto = new RefundHandleDTO();
+        dto.setHandleReason(reason);
+        return dto;
+    }
+
+    private long farmerUserId(long farmerId) {
+        Long id = jdbcTemplate.queryForObject("SELECT user_id FROM t_farmer WHERE id = ?", Long.class, farmerId);
+        return id == null ? 0 : id;
+    }
+
+    private long createAdminUser() {
+        long n = seq.incrementAndGet();
+        User user = new User();
+        user.setUsername("admin_" + n);
+        user.setPasswordHash("x");
+        user.setPhone("139" + String.format("%08d", n % 100000000));
+        user.setRole(1);
+        user.setStatus(1);
+        userMapper.insert(user);
+        return user.getId();
+    }
+
+    private long queryLong(String sql) {
+        Long value = jdbcTemplate.queryForObject(sql, Long.class);
+        return value == null ? 0 : value;
+    }
+
+    private String adminToken(long userId) {
+        return jwtUtils.generateAccessToken(userId, 1);
     }
 
     private String createOrderViaApi(long userId, long addressId, List<Long> cartIds) throws Exception {

@@ -6,6 +6,9 @@ import com.freshtrace.common.BizException;
 import com.freshtrace.common.ErrorCode;
 import com.freshtrace.common.PageVO;
 import com.freshtrace.common.cache.CacheKeys;
+import com.freshtrace.common.mq.MqTags;
+import com.freshtrace.common.mq.MqTopics;
+import com.freshtrace.common.mq.RocketMqProducer;
 import com.freshtrace.farmer.entity.Farmer;
 import com.freshtrace.farmer.mapper.FarmerMapper;
 import com.freshtrace.review.dto.ReviewCreateDTO;
@@ -23,19 +26,24 @@ import com.freshtrace.trade.mapper.OrderItemMapper;
 import com.freshtrace.trade.mapper.OrderMapper;
 import com.freshtrace.trade.mapper.SubOrderMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 评价实现（Phase 4 Day 3）。
@@ -59,6 +67,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final FarmerMapper farmerMapper;
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
+    private final ObjectProvider<RocketMqProducer> rocketMqProducerProvider;
     private final TransactionTemplate transactionTemplate;
 
     public ReviewServiceImpl(ReviewMapper reviewMapper,
@@ -68,6 +77,7 @@ public class ReviewServiceImpl implements ReviewService {
                              FarmerMapper farmerMapper,
                              StringRedisTemplate stringRedisTemplate,
                              ObjectMapper objectMapper,
+                             ObjectProvider<RocketMqProducer> rocketMqProducerProvider,
                              PlatformTransactionManager transactionManager) {
         this.reviewMapper = reviewMapper;
         this.subOrderMapper = subOrderMapper;
@@ -76,6 +86,7 @@ public class ReviewServiceImpl implements ReviewService {
         this.farmerMapper = farmerMapper;
         this.stringRedisTemplate = stringRedisTemplate;
         this.objectMapper = objectMapper;
+        this.rocketMqProducerProvider = rocketMqProducerProvider;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.transactionTemplate.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
@@ -118,6 +129,45 @@ public class ReviewServiceImpl implements ReviewService {
         update.setReply(dto.getReply());
         update.setRepliedAt(LocalDateTime.now().withNano(0));
         reviewMapper.updateById(update);
+
+        // 事务提交后发送「果农已回复」通知给买家，避免在事务内发送 MQ
+        registerReplyNotification(review);
+    }
+
+    /**
+     * 注册事务提交后回调：发送评价回复通知（NOTIFICATION / REVIEW_REPLIED）。
+     * 无事务同步（如被非事务调用）时直接发送；发送失败不影响已提交的回复。
+     */
+    private void registerReplyNotification(Review review) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    sendReplyNotification(review);
+                }
+            });
+            return;
+        }
+        sendReplyNotification(review);
+    }
+
+    private void sendReplyNotification(Review review) {
+        RocketMqProducer producer = rocketMqProducerProvider.getIfAvailable();
+        if (producer == null) {
+            log.info("rocketmq disabled, skip review reply notification, reviewId={}", review.getId());
+            return;
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("reviewId", review.getId());
+        payload.put("buyerId", review.getUserId());
+        payload.put("farmerId", review.getFarmerId());
+        payload.put("productId", review.getProductId());
+        try {
+            producer.send(MqTopics.NOTIFICATION, MqTags.REVIEW_REPLIED,
+                    String.valueOf(review.getId()), objectMapper.writeValueAsString(payload));
+        } catch (Exception e) {
+            log.error("review reply notification send failed, reviewId={}", review.getId(), e);
+        }
     }
 
     @Override

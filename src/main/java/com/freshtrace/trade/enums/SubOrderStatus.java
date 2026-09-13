@@ -11,12 +11,12 @@ import java.util.Map;
  * 状态转换白名单（对照 PRD v1.1 子订单状态机）：
  * <pre>
  * 待支付 ──支付成功──▶ 待发货 ──果农发货──▶ 待收货 ──确认收货──▶ 已完成
- *    │                  │                     │
+ *    │                  │                     │                         │
  *    └──超时/取消────▶ 已取消                 └──申请退款──▶ 退款中 ──▶ 已退款
- *                        │                                        └──▶ 恢复待收货
+ *                        │                                 └──▶ 恢复原状态（待收货/已完成）
  *                        ├──超时72h未发货──▶ 已取消（自动退款）
  *                        └──申请退款──▶ 退款中
- * 已完成 ──7天内售后──▶ 退款中（Phase 10 平台仲裁）
+ * 已完成 ──7天内售后──▶ 退款中（Phase 10 平台仲裁，驳回后恢复已完成）
  * </pre>
  * 已取消 / 已退款 为终态。
  */
@@ -39,7 +39,8 @@ public enum SubOrderStatus {
             PENDING_PAY, EnumSet.of(PENDING_SHIP, CANCELLED),
             PENDING_SHIP, EnumSet.of(PENDING_RECEIVE, REFUNDING, CANCELLED),
             PENDING_RECEIVE, EnumSet.of(FINISHED, REFUNDING),
-            REFUNDING, EnumSet.of(REFUNDED, PENDING_RECEIVE),
+            // 退款中可恢复原状态：待收货（发货后退款被驳回/撤销）或已完成（Phase 10 售后仲裁驳回）
+            REFUNDING, EnumSet.of(REFUNDED, PENDING_RECEIVE, FINISHED),
             FINISHED, EnumSet.of(REFUNDING),
             CANCELLED, EnumSet.noneOf(SubOrderStatus.class),
             REFUNDED, EnumSet.noneOf(SubOrderStatus.class)

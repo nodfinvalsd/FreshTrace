@@ -1,5 +1,6 @@
 package com.freshtrace.product.controller;
 
+import com.freshtrace.admin.support.OperationLog;
 import com.freshtrace.common.R;
 import com.freshtrace.product.dto.SpuCreateDTO;
 import com.freshtrace.product.dto.SpuUpdateDTO;
@@ -28,6 +29,7 @@ public class SpuController {
 
     @PostMapping
     @RoleRequired(role = 1)
+    @OperationLog(action = "新增SPU", targetType = "SPU")
     public R<SpuVO> create(@Valid @RequestBody SpuCreateDTO dto) {
         return R.ok(spuService.create(dto));
     }
@@ -44,12 +46,14 @@ public class SpuController {
 
     @PutMapping("/{id}")
     @RoleRequired(role = 1)
+    @OperationLog(action = "更新SPU", targetType = "SPU")
     public R<SpuVO> update(@PathVariable Long id, @Valid @RequestBody SpuUpdateDTO dto) {
         return R.ok(spuService.update(id, dto));
     }
 
     @DeleteMapping("/{id}")
     @RoleRequired(role = 1)
+    @OperationLog(action = "删除SPU", targetType = "SPU")
     public R<Void> delete(@PathVariable Long id) {
         spuService.delete(id);
         return R.ok();

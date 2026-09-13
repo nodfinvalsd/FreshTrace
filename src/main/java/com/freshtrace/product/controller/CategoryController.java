@@ -1,5 +1,6 @@
 package com.freshtrace.product.controller;
 
+import com.freshtrace.admin.support.OperationLog;
 import com.freshtrace.common.R;
 import com.freshtrace.product.dto.CategoryCreateDTO;
 import com.freshtrace.product.dto.CategoryUpdateDTO;
@@ -28,6 +29,7 @@ public class CategoryController {
 
     @PostMapping
     @RoleRequired(role = 1)
+    @OperationLog(action = "新增品类", targetType = "CATEGORY")
     public R<CategoryVO> create(@Valid @RequestBody CategoryCreateDTO dto) {
         return R.ok(categoryService.create(dto));
     }
@@ -44,12 +46,14 @@ public class CategoryController {
 
     @PutMapping("/{id}")
     @RoleRequired(role = 1)
+    @OperationLog(action = "更新品类", targetType = "CATEGORY")
     public R<CategoryVO> update(@PathVariable Long id, @Valid @RequestBody CategoryUpdateDTO dto) {
         return R.ok(categoryService.update(id, dto));
     }
 
     @DeleteMapping("/{id}")
     @RoleRequired(role = 1)
+    @OperationLog(action = "删除品类", targetType = "CATEGORY")
     public R<Void> delete(@PathVariable Long id) {
         categoryService.delete(id);
         return R.ok();

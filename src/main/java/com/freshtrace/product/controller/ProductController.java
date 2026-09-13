@@ -1,7 +1,6 @@
 package com.freshtrace.product.controller;
 
 import com.freshtrace.common.R;
-import com.freshtrace.product.dto.ProductAuditDTO;
 import com.freshtrace.product.dto.ProductCreateDTO;
 import com.freshtrace.product.dto.ProductLifecycleUpdateDTO;
 import com.freshtrace.product.dto.ProductUpdateDTO;
@@ -9,7 +8,6 @@ import com.freshtrace.product.service.ProductService;
 import com.freshtrace.product.vo.ProductDetailVO;
 import com.freshtrace.product.vo.ProductVO;
 import com.freshtrace.security.FarmerRequired;
-import com.freshtrace.security.RoleRequired;
 import com.freshtrace.security.UserContext;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -43,13 +41,6 @@ public class ProductController {
     @FarmerRequired
     public R<ProductVO> update(@PathVariable Long id, @Valid @RequestBody ProductUpdateDTO dto) {
         return R.ok(productService.update(UserContext.get().getUserId(), id, dto));
-    }
-
-    @PostMapping("/{id}/audit")
-    @RoleRequired(role = 1)
-    public R<Void> audit(@PathVariable Long id, @Valid @RequestBody ProductAuditDTO dto) {
-        productService.audit(id, dto);
-        return R.ok();
     }
 
     @PostMapping("/{id}/lifecycle")

@@ -1,5 +1,8 @@
 DELETE FROM t_presale_reservation;
 DELETE FROM t_presale;
+DELETE FROM t_notification;
+DELETE FROM t_operation_log;
+DELETE FROM t_report;
 DELETE FROM t_chat_message;
 DELETE FROM t_conversation;
 DELETE FROM t_post_image;

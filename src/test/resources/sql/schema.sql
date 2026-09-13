@@ -467,3 +467,67 @@ CREATE TABLE t_chat_message (
     KEY idx_conv_id (conversation_id, id),
     KEY idx_conv_read (conversation_id, is_read)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='聊天消息表';
+
+-- ============ Phase 9 消息通知 ============
+
+DROP TABLE IF EXISTS t_notification;
+
+CREATE TABLE t_notification (
+    id          BIGINT       NOT NULL COMMENT '通知ID(雪花)',
+    user_id     BIGINT       NOT NULL COMMENT '接收用户ID',
+    type        TINYINT      NOT NULL COMMENT '1=订单,2=预售,3=聊天,4=系统',
+    title       VARCHAR(200) NOT NULL COMMENT '通知标题',
+    content     VARCHAR(500)          DEFAULT NULL COMMENT '通知内容',
+    related_id  BIGINT                DEFAULT NULL COMMENT '关联业务ID(子订单/预售/评价等)',
+    is_read     TINYINT      NOT NULL DEFAULT 0 COMMENT '是否已读 0=否 1=是',
+    dedup_key   VARCHAR(200)          DEFAULT NULL COMMENT '幂等去重键 tag:relatedId:userId',
+    create_time DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted     TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除 0=未删 1=已删',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_dedup_key (dedup_key),
+    KEY idx_user_id_read (user_id, is_read),
+    KEY idx_create_time (create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='通知表';
+
+-- ============ Phase 10 管理后台 ============
+
+DROP TABLE IF EXISTS t_report;
+
+CREATE TABLE t_report (
+    id              BIGINT        NOT NULL COMMENT '举报ID(雪花)',
+    user_id         BIGINT        NOT NULL COMMENT '举报人',
+    target_type     TINYINT       NOT NULL COMMENT '1=溯源信息,2=商品品质,3=果农行为',
+    target_id       BIGINT        NOT NULL COMMENT '举报对象ID',
+    reason          VARCHAR(500)  NOT NULL COMMENT '举报原因',
+    evidence_images VARCHAR(2000)          DEFAULT NULL COMMENT '凭证图片(JSON)',
+    status          TINYINT       NOT NULL DEFAULT 0 COMMENT '0=待处理,1=已处理(有效),2=已驳回(无效)',
+    handler_id      BIGINT                 DEFAULT NULL COMMENT '处理人ID(管理员)',
+    handle_reason   VARCHAR(500)           DEFAULT NULL COMMENT '处理意见',
+    handled_at      DATETIME               DEFAULT NULL COMMENT '处理时间',
+    create_time     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted         TINYINT       NOT NULL DEFAULT 0 COMMENT '逻辑删除 0=未删 1=已删',
+    PRIMARY KEY (id),
+    KEY idx_target (target_type, target_id),
+    KEY idx_user_id (user_id),
+    KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='举报表';
+
+DROP TABLE IF EXISTS t_operation_log;
+
+CREATE TABLE t_operation_log (
+    id          BIGINT        NOT NULL COMMENT '日志ID(雪花)',
+    operator_id BIGINT                 DEFAULT NULL COMMENT '操作人ID',
+    target_type VARCHAR(50)   NOT NULL COMMENT '操作对象类型(FARMER/PRODUCT/REFUND/REPORT...)',
+    target_id   BIGINT                 DEFAULT NULL COMMENT '操作对象ID',
+    action      VARCHAR(50)   NOT NULL COMMENT '操作动作',
+    detail      VARCHAR(1000)          DEFAULT NULL COMMENT '参数摘要(JSON)',
+    ip_address  VARCHAR(50)            DEFAULT NULL COMMENT '操作IP',
+    create_time DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '操作时间',
+    PRIMARY KEY (id),
+    KEY idx_target (target_type, target_id),
+    KEY idx_operator (operator_id),
+    KEY idx_create_time (create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='操作日志表';
+

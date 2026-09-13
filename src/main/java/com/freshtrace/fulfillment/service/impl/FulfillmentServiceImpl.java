@@ -82,7 +82,7 @@ public class FulfillmentServiceImpl implements FulfillmentService {
         this.transactionTemplate.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
 
-    private record ShipContext(ShipResultVO result, Long orderId, Long subOrderId) {
+    private record ShipContext(ShipResultVO result, Long orderId, Long subOrderId, Long buyerId) {
     }
 
     private record ConfirmContext(boolean transitioned, SubOrder current, Long orderId, LocalDateTime receivedAt) {
@@ -140,6 +140,11 @@ public class FulfillmentServiceImpl implements FulfillmentService {
         } catch (Exception e) {
             log.error("send auto-confirm message failed, subOrderNo={}", subOrderNo, e);
         }
+        try {
+            sendShipNotification(context);
+        } catch (Exception e) {
+            log.error("send ship notification failed, subOrderNo={}", subOrderNo, e);
+        }
         return context.result();
     }
 
@@ -175,7 +180,42 @@ public class FulfillmentServiceImpl implements FulfillmentService {
         vo.setLogisticsCompany(dto.getLogisticsCompany());
         vo.setLogisticsNo(dto.getLogisticsNo());
         vo.setShippedAt(now);
-        return new ShipContext(vo, subOrder.getOrderId(), subOrder.getId());
+        // 读取买家账号，供事务提交后发送「已发货」站内通知（Phase 9）
+        Order order = orderMapper.selectById(subOrder.getOrderId());
+        Long buyerId = order == null ? null : order.getUserId();
+        return new ShipContext(vo, subOrder.getOrderId(), subOrder.getId(), buyerId);
+    }
+
+    /**
+     * 事务提交后：发送「已发货」通知事件（NOTIFICATION / ORDER_SHIPPED），
+     * 由 BusinessNotificationConsumer 消费写入买家站内信。发送失败不影响已发货事实。
+     */
+    private void sendShipNotification(ShipContext context) {
+        if (context.buyerId() == null) {
+            log.warn("skip ship notification, buyer not found, subOrderNo={}",
+                    context.result().getSubOrderNo());
+            return;
+        }
+        RocketMqProducer producer = rocketMqProducerProvider.getIfAvailable();
+        if (producer == null) {
+            log.info("rocketmq disabled, skip ship notification, subOrderNo={}",
+                    context.result().getSubOrderNo());
+            return;
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("orderId", context.orderId());
+        payload.put("subOrderId", context.subOrderId());
+        payload.put("subOrderNo", context.result().getSubOrderNo());
+        payload.put("buyerId", context.buyerId());
+        payload.put("logisticsCompany", context.result().getLogisticsCompany());
+        payload.put("logisticsNo", context.result().getLogisticsNo());
+        try {
+            producer.send(MqTopics.NOTIFICATION, MqTags.ORDER_SHIPPED,
+                    context.result().getSubOrderNo(), objectMapper.writeValueAsString(payload));
+        } catch (Exception e) {
+            log.error("ship notification send failed, subOrderNo={}",
+                    context.result().getSubOrderNo(), e);
+        }
     }
 
     /**
@@ -264,6 +304,12 @@ public class FulfillmentServiceImpl implements FulfillmentService {
             throw new BizException(ErrorCode.SUB_ORDER_STATUS_INVALID, "子订单状态不允许确认收货");
         }
 
+        try {
+            sendReceiveNotification(subOrder);
+        } catch (Exception e) {
+            log.error("send receive notification failed, subOrderNo={}", subOrderNo, e);
+        }
+
         ReceiveResultVO vo = new ReceiveResultVO();
         vo.setSubOrderNo(subOrderNo);
         vo.setStatus(SubOrderStatus.FINISHED.getCode());
@@ -297,6 +343,35 @@ public class FulfillmentServiceImpl implements FulfillmentService {
             SubOrder latest = context.current();
             log.info("auto confirm: concurrent confirm lost, subOrderNo={}, latestStatus={}",
                     subOrderNo, latest == null ? null : latest.getStatus());
+            return;
+        }
+        try {
+            sendReceiveNotification(subOrder);
+        } catch (Exception e) {
+            log.error("send receive notification failed, subOrderNo={}", subOrderNo, e);
+        }
+    }
+
+    /**
+     * 事务提交后：发送「确认收货」通知事件（NOTIFICATION / ORDER_RECEIVED），
+     * 由 BusinessNotificationConsumer 消费写入果农站内信。发送失败不影响已完成事实。
+     */
+    private void sendReceiveNotification(SubOrder subOrder) {
+        RocketMqProducer producer = rocketMqProducerProvider.getIfAvailable();
+        if (producer == null) {
+            log.info("rocketmq disabled, skip receive notification, subOrderNo={}", subOrder.getSubOrderNo());
+            return;
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("orderId", subOrder.getOrderId());
+        payload.put("subOrderId", subOrder.getId());
+        payload.put("subOrderNo", subOrder.getSubOrderNo());
+        payload.put("farmerId", subOrder.getFarmerId());
+        try {
+            producer.send(MqTopics.NOTIFICATION, MqTags.ORDER_RECEIVED,
+                    subOrder.getSubOrderNo(), objectMapper.writeValueAsString(payload));
+        } catch (Exception e) {
+            log.error("receive notification send failed, subOrderNo={}", subOrder.getSubOrderNo(), e);
         }
     }
 
