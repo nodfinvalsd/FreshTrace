@@ -24,7 +24,8 @@ mybatis-plus:
 
 jwt:
   secret: ${JWT_SECRET:freshtrace-jwt-secret-key-2026-please-change-in-prod}
-  expire: 7200
+  access-expire: 1800
+  refresh-expire: 604800
 
 aes:
   key: ${AES_KEY:freshtraceaeskey}
@@ -32,3 +33,50 @@ aes:
 storage:
   local-dir: ${STORAGE_DIR:uploads}
   base-url: /uploads
+
+rocketmq:
+  enabled: ${ROCKETMQ_ENABLED:true}
+  name-server: ${ROCKETMQ_NAME_SERVER:localhost:9876}
+  producer:
+    group: ${ROCKETMQ_PRODUCER_GROUP:freshtrace-producer-group}
+    send-timeout-ms: 3000
+    retry-times-when-send-failed: 2
+  consumer:
+    order-timeout-group: ${ROCKETMQ_ORDER_TIMEOUT_CONSUMER_GROUP:freshtrace-order-timeout-consumer}
+    auto-confirm-group: ${ROCKETMQ_AUTO_CONFIRM_CONSUMER_GROUP:freshtrace-auto-confirm-consumer}
+    presale-expire-group: ${ROCKETMQ_PRESALE_EXPIRE_CONSUMER_GROUP:freshtrace-presale-expire-consumer}
+    notification-farmer-group: ${ROCKETMQ_NOTIFICATION_FARMER_CONSUMER_GROUP:freshtrace-notification-farmer-consumer}
+    notification-business-group: ${ROCKETMQ_NOTIFICATION_BUSINESS_CONSUMER_GROUP:freshtrace-notification-business-consumer}
+    notification-presale-group: ${ROCKETMQ_NOTIFICATION_PRESALE_CONSUMER_GROUP:freshtrace-notification-presale-consumer}
+    es-sync-group: ${ROCKETMQ_ES_SYNC_CONSUMER_GROUP:freshtrace-es-sync-consumer}
+
+elasticsearch:
+  enabled: ${ELASTICSEARCH_ENABLED:true}
+  uris: ${ELASTICSEARCH_URIS:http://localhost:9200}
+  index: ${ELASTICSEARCH_INDEX:freshtrace_product}
+  connect-timeout-ms: ${ELASTICSEARCH_CONNECT_TIMEOUT_MS:5000}
+  socket-timeout-ms: ${ELASTICSEARCH_SOCKET_TIMEOUT_MS:30000}
+
+inventory:
+  reconciliation:
+    enabled: ${INVENTORY_RECONCILIATION_ENABLED:false}
+    interval-ms: ${INVENTORY_RECONCILIATION_INTERVAL_MS:300000}
+
+fulfillment:
+  auto-confirm:
+    enabled: ${AUTO_CONFIRM_ENABLED:true}
+    interval-ms: ${AUTO_CONFIRM_INTERVAL_MS:300000}
+
+presale:
+  expire:
+    enabled: ${PRESALE_EXPIRE_ENABLED:true}
+    interval-ms: ${PRESALE_EXPIRE_INTERVAL_MS:300000}
+  count-reconciliation:
+    enabled: ${PRESALE_COUNT_RECONCILIATION_ENABLED:true}
+    interval-ms: ${PRESALE_COUNT_RECONCILIATION_INTERVAL_MS:300000}
+
+product:
+  hot:
+    enabled: ${PRODUCT_HOT_ENABLED:true}
+    refresh-interval-ms: ${PRODUCT_HOT_REFRESH_INTERVAL_MS:300000}
+    initial-delay-ms: ${PRODUCT_HOT_INITIAL_DELAY_MS:60000}

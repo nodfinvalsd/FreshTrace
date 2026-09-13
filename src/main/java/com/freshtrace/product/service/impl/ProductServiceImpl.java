@@ -27,6 +27,7 @@ import com.freshtrace.product.mapper.ProductAttributeMapper;
 import com.freshtrace.product.mapper.ProductImageMapper;
 import com.freshtrace.product.mapper.ProductMapper;
 import com.freshtrace.product.mapper.SpuMapper;
+import com.freshtrace.product.search.ProductEsSyncPublisher;
 import com.freshtrace.product.service.ProductService;
 import com.freshtrace.product.vo.AdminProductVO;
 import com.freshtrace.product.vo.CategoryVO;
@@ -43,8 +44,10 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -64,6 +67,10 @@ public class ProductServiceImpl implements ProductService {
     private final CategoryMapper categoryMapper;
     private final FarmerMapper farmerMapper;
     private final StringRedisTemplate stringRedisTemplate;
+    private final ProductEsSyncPublisher productEsSyncPublisher;
+    private final ObjectMapper objectMapper;
+
+    private static final Duration DETAIL_CACHE_TTL = Duration.ofHours(1);
 
     @Override
     @Transactional
@@ -91,11 +98,33 @@ public class ProductServiceImpl implements ProductService {
         saveAttributes(product.getId(), dto.getAttributes());
         saveImages(product.getId(), dto.getImages());
         evictFarmerHome(farmer.getId());
+        productEsSyncPublisher.publishUpsert(product.getId());
         return toVO(product);
     }
 
     @Override
     public ProductDetailVO detail(Long id) {
+        String cacheKey = CacheKeys.productDetail(id);
+        try {
+            String cached = stringRedisTemplate.opsForValue().get(cacheKey);
+            if (StringUtils.hasText(cached)) {
+                return objectMapper.readValue(cached, ProductDetailVO.class);
+            }
+        } catch (Exception e) {
+            log.warn("read product detail cache failed, productId={}", id, e);
+        }
+
+        ProductDetailVO vo = loadDetail(id);
+        try {
+            stringRedisTemplate.opsForValue().set(cacheKey,
+                    objectMapper.writeValueAsString(vo), DETAIL_CACHE_TTL);
+        } catch (Exception e) {
+            log.warn("write product detail cache failed, productId={}", id, e);
+        }
+        return vo;
+    }
+
+    private ProductDetailVO loadDetail(Long id) {
         Product product = productMapper.selectById(id);
         if (product == null) {
             throw new BizException(ErrorCode.PRODUCT_NOT_FOUND);
@@ -173,6 +202,8 @@ public class ProductServiceImpl implements ProductService {
             saveImages(id, dto.getImages());
         }
         evictFarmerHome(product.getFarmerId());
+        evictProductDetail(id);
+        productEsSyncPublisher.publishUpsert(id);
         return toVO(product);
     }
 
@@ -196,6 +227,8 @@ public class ProductServiceImpl implements ProductService {
                 .set(Product::getAuditStatus, dto.getAuditStatus())
                 .set(Product::getAuditReason, dto.getAuditStatus() == 1 ? null : dto.getAuditReason()));
         evictFarmerHome(product.getFarmerId());
+        evictProductDetail(id);
+        productEsSyncPublisher.publishUpsert(id);
     }
 
     @Override
@@ -254,6 +287,8 @@ public class ProductServiceImpl implements ProductService {
                 .set(Product::getLifecycle, target.getCode()));
         product.setLifecycle(target.getCode());
         evictFarmerHome(product.getFarmerId());
+        evictProductDetail(id);
+        productEsSyncPublisher.publishUpsert(id);
         return toVO(product);
     }
 
@@ -273,6 +308,8 @@ public class ProductServiceImpl implements ProductService {
                 .set(Product::getLifecycle, ProductLifecycle.PLANTING.getCode()));
         product.setLifecycle(ProductLifecycle.PLANTING.getCode());
         evictFarmerHome(product.getFarmerId());
+        evictProductDetail(id);
+        productEsSyncPublisher.publishUpsert(id);
         return toVO(product);
     }
 
@@ -292,6 +329,8 @@ public class ProductServiceImpl implements ProductService {
                 .set(Product::getLifecycle, ProductLifecycle.ON_SALE.getCode()));
         product.setLifecycle(ProductLifecycle.ON_SALE.getCode());
         evictFarmerHome(product.getFarmerId());
+        evictProductDetail(id);
+        productEsSyncPublisher.publishUpsert(id);
         return toVO(product);
     }
 
@@ -313,6 +352,8 @@ public class ProductServiceImpl implements ProductService {
                 .eq(Product::getId, productId)
                 .set(Product::getLifecycle, ProductLifecycle.PRESALE.getCode()));
         evictFarmerHome(product.getFarmerId());
+        evictProductDetail(productId);
+        productEsSyncPublisher.publishUpsert(productId);
     }
 
     @Override
@@ -329,6 +370,8 @@ public class ProductServiceImpl implements ProductService {
                 .eq(Product::getId, productId)
                 .set(Product::getLifecycle, ProductLifecycle.PLANTING.getCode()));
         evictFarmerHome(product.getFarmerId());
+        evictProductDetail(productId);
+        productEsSyncPublisher.publishUpsert(productId);
     }
 
     @Override
@@ -349,6 +392,8 @@ public class ProductServiceImpl implements ProductService {
                 .eq(Product::getId, productId)
                 .set(Product::getLifecycle, ProductLifecycle.ON_SALE.getCode()));
         evictFarmerHome(product.getFarmerId());
+        evictProductDetail(productId);
+        productEsSyncPublisher.publishUpsert(productId);
     }
 
     /**
@@ -487,6 +532,17 @@ public class ProductServiceImpl implements ProductService {
             stringRedisTemplate.delete(CacheKeys.farmerHome(farmerId));
         } catch (Exception e) {
             log.warn("invalidate farmer home cache failed, farmerId={}", farmerId, e);
+        }
+    }
+
+    /**
+     * 失效商品详情缓存（Phase 2.14）。
+     */
+    private void evictProductDetail(Long productId) {
+        try {
+            stringRedisTemplate.delete(CacheKeys.productDetail(productId));
+        } catch (Exception e) {
+            log.warn("invalidate product detail cache failed, productId={}", productId, e);
         }
     }
 

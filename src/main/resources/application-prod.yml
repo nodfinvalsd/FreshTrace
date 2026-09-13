@@ -10,6 +10,22 @@ spring:
       port: ${REDIS_PORT:6379}
       timeout: 5000ms
 
+elasticsearch:
+  enabled: ${ELASTICSEARCH_ENABLED:true}
+  uris: ${ELASTICSEARCH_URIS:http://localhost:9200}
+  index: ${ELASTICSEARCH_INDEX:freshtrace_product}
+
+# 生产强制外部注入，缺失则启动失败（避免使用开发默认密钥）
+jwt:
+  secret: ${JWT_SECRET}
+
+aes:
+  key: ${AES_KEY}
+
+storage:
+  local-dir: ${STORAGE_DIR:uploads}
+  base-url: ${STORAGE_BASE_URL:/uploads}
+
 logging:
   level:
     com.freshtrace: info

@@ -4,6 +4,7 @@ import com.freshtrace.common.R;
 import com.freshtrace.product.dto.ProductCreateDTO;
 import com.freshtrace.product.dto.ProductLifecycleUpdateDTO;
 import com.freshtrace.product.dto.ProductUpdateDTO;
+import com.freshtrace.product.service.ProductHotService;
 import com.freshtrace.product.service.ProductService;
 import com.freshtrace.product.vo.ProductDetailVO;
 import com.freshtrace.product.vo.ProductVO;
@@ -17,7 +18,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/product")
@@ -25,6 +29,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class ProductController {
 
     private final ProductService productService;
+
+    private final ProductHotService productHotService;
 
     @PostMapping
     @FarmerRequired
@@ -35,6 +41,11 @@ public class ProductController {
     @GetMapping("/{id}")
     public R<ProductDetailVO> detail(@PathVariable Long id) {
         return R.ok(productService.detail(id));
+    }
+
+    @GetMapping("/hot")
+    public R<List<ProductVO>> hot(@RequestParam(defaultValue = "10") int limit) {
+        return R.ok(productHotService.hotProducts(limit));
     }
 
     @PutMapping("/{id}")

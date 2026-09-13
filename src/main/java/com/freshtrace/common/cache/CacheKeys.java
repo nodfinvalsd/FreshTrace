@@ -32,4 +32,19 @@ public final class CacheKeys {
     public static String adminDashboardOverview() {
         return "admin:dashboard:overview";
     }
+
+    /**
+     * 商品详情缓存 Key（Phase 2.14）。读时回写、TTL 1h，商品编辑/审核/状态变更时删除。
+     */
+    public static String productDetail(Long productId) {
+        return "product:detail:" + productId;
+    }
+
+    /**
+     * 热门商品 ZSET Key（Phase 2.15）。member=productId，score=销量；
+     * 定时任务按销量 Top100 全量重建。
+     */
+    public static String hotProducts() {
+        return "product:hot";
+    }
 }

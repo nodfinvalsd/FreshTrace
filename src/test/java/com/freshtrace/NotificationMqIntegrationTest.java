@@ -58,6 +58,10 @@ class NotificationMqIntegrationTest {
 
     @Test
     void endToEndMqNotificationFlow() throws Exception {
+        // 等待消费者订阅并就绪：DefaultMQPushConsumer 默认从 LAST_OFFSET 起消费，
+        // 若发送早于 offset 初始化，消息会被跳过（全量跑时 context 重建后尤其明显）。
+        Thread.sleep(3000L);
+
         // 1. 果农事件：下单/支付通知 → FARMER_NOTIFICATION → 果农站内信
         Long farmerId = createFarmer();
         Long farmerUserId = farmerMapper.selectById(farmerId).getUserId();

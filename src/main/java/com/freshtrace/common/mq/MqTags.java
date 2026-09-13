@@ -49,4 +49,10 @@ public final class MqTags {
 
     /** 平台仲裁驳回退款（→ 买家，Phase 10） */
     public static final String REFUND_ARBITRATION_REJECTED = "refund_arbitration_rejected";
+
+    /** 商品索引 upsert（Phase 11 ES 同步） */
+    public static final String PRODUCT_UPSERT = "product_upsert";
+
+    /** 商品索引删除（Phase 11 ES 同步） */
+    public static final String PRODUCT_DELETE = "product_delete";
 }

@@ -9,3 +9,25 @@ spring:
       host: localhost
       port: 6379
       timeout: 5000ms
+
+rocketmq:
+  enabled: false
+
+elasticsearch:
+  enabled: false
+
+inventory:
+  reconciliation:
+    enabled: false
+
+fulfillment:
+  auto-confirm:
+    enabled: false
+
+admin:
+  dashboard:
+    cache-refresh-enabled: false
+
+product:
+  hot:
+    enabled: false
